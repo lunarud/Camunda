@@ -1,0 +1,5 @@
+<bpmn:userTask id="ApprovalTask" name="Review Request">
+  <bpmn:extensionElements>
+    <camunda:formKey>embedded:app:forms/approval-form.html</camunda:formKey>
+  </bpmn:extensionElements>
+</bpmn:userTask>
