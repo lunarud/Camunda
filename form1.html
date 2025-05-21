@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Request Approval Form</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/css/bootstrap.min.css">
+  <style>
+    .form-container {
+      padding: 20px;
+      max-width: 600px;
+    }
+    .btn-group-approval {
+      margin-bottom: 15px;
+    }
+    .approval-btn.active {
+      font-weight: bold;
+    }
+    .required-field::after {
+      content: "*";
+      color: red;
+      margin-left: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="form-container">
+    <form name="approvalForm" role="form">
+      <div class="card mb-4">
+        <div class="card-header bg-light">
+          <h5 class="mb-0">Request Review</h5>
+        </div>
+        <div class="card-body">
+          <!-- Decision Buttons -->
+          <div class="form-group">
+            <label for="approvalStatus" class="required-field">Decision</label>
+            <div class="btn-group btn-group-approval btn-group-toggle d-flex" data-toggle="buttons">
+              <label class="btn btn-outline-success approval-btn flex-fill">
+                <input type="radio" name="approvalStatus" cam-variable-name="approvalStatus" 
+                       cam-variable-type="String" value="approved" required> Approve
+              </label>
+              <label class="btn btn-outline-danger approval-btn flex-fill">
+                <input type="radio" name="approvalStatus" cam-variable-name="approvalStatus" 
+                       cam-variable-type="String" value="rejected"> Reject
+              </label>
+            </div>
+          </div>
+          
+          <!-- Comments -->
+          <div class="form-group">
+            <label for="comments">Comments</label>
+            <textarea class="form-control" id="comments" name="comments" 
+                      cam-variable-name="comments" cam-variable-type="String" 
+                      rows="3" placeholder="Add your comments here..."></textarea>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Submit Button -->
+      <div class="text-right">
+        <button type="submit" class="btn btn-primary">Complete Task</button>
+      </div>
+    </form>
+  </div>
+  
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <script cam-script type="text/form-script">
+    camForm.on('form-loaded', function() {
+      // This code runs when the form is loaded
+      
+      // Initialize approval buttons to toggle active class
+      $('input[name="approvalStatus"]').change(function() {
+        $('.approval-btn').removeClass('active');
+        $(this).parent('.approval-btn').addClass('active');
+      });
+      
+      // You can pre-fill form fields based on process variables here
+    });
+    
+    camForm.on('submit', function(evt) {
+      // This code runs before the form is submitted
+      
+      // Validate that a decision has been made
+      if (!$('input[name="approvalStatus"]:checked').val()) {
+        alert('Please select a decision (Approve or Reject)');
+        evt.submitPrevented = true;
+        return;
+      }
+    });
+  </script>
+</body>
+</html>
