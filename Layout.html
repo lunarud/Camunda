@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSS Grid Two Column Layout</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: 20% 80%;
+            gap: 20px;
+            min-height: 500px;
+        }
+
+        .left-column {
+            background-color: #e3f2fd;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .right-column {
+            background-color: #f3e5f5;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            justify-self: end;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        p {
+            line-height: 1.6;
+            color: #666;
+        }
+
+        .button-container {
+            float: right;
+            margin-top: 20px;
+        }
+
+        .float-button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin-left: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+
+        .float-button:hover {
+            background-color: #45a049;
+        }
+
+        .float-button.secondary {
+            background-color: #2196F3;
+        }
+
+        .float-button.secondary:hover {
+            background-color: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <div class="grid-container">
+        <div class="left-column">
+            <h2>Left Column (20%)</h2>
+            <p>This is the left column taking up 20% of the container width. It's styled with a light blue background.</p>
+            <ul>
+                <li>Navigation item 1</li>
+                <li>Navigation item 2</li>
+                <li>Navigation item 3</li>
+            </ul>
+        </div>
+        
+        <div class="right-column">
+            <h2>Right Column (80%)</h2>
+            <p>This is the right column taking up 80% of the container width. It has a light purple background and contains the main content area.</p>
+            <p>CSS Grid makes it easy to create responsive layouts without the need for floats. The grid-template-columns property defines the column sizes, and the gap property adds space between columns.</p>
+            <p>This approach is more modern and flexible than using floats, as it automatically handles alignment and doesn't require clearing floats.</p>
+            
+            <div class="button-container">
+                <button class="float-button secondary">Cancel</button>
+                <button class="float-button">Submit</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
