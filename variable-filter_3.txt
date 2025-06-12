@@ -1,0 +1,190 @@
+using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace CamundaFilterApi.Controllers
+{
+    [ApiController]
+    [Route("api")]
+    public class CamundaController : ControllerBase
+    {
+        private readonly ICamundaService _camundaService;
+
+        public CamundaController(ICamundaService camundaService)
+        {
+            _camundaService = camundaService;
+        }
+
+        [HttpGet("process-instances")]
+        public async Task<ActionResult<IEnumerable<ProcessInstanceDto>>> GetProcessInstances(
+            [FromQuery] string processDefinitionKey = null,
+            [FromQuery] string variableFilters = null)
+        {
+            try
+            {
+                var filters = new List<VariableFilterDto>();
+                
+                if (!string.IsNullOrEmpty(variableFilters))
+                {
+                    filters = JsonConvert.DeserializeObject<List<VariableFilterDto>>(variableFilters);
+                }
+
+                var criteria = new FilterCriteriaDto
+                {
+                    ProcessDefinitionKey = processDefinitionKey,
+                    Variables = filters
+                };
+
+                var processInstances = await _camundaService.GetProcessInstancesAsync(criteria);
+                return Ok(processInstances);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error retrieving process instances: {ex.Message}");
+            }
+        }
+
+        [HttpGet("tasks")]
+        public async Task<ActionResult<IEnumerable<TaskDto>>> GetTasks(
+            [FromQuery] string processDefinitionKey = null,
+            [FromQuery] string taskDefinitionKey = null,
+            [FromQuery] string assignee = null,
+            [FromQuery] string variableFilters = null)
+        {
+            try
+            {
+                var filters = new List<VariableFilterDto>();
+                
+                if (!string.IsNullOrEmpty(variableFilters))
+                {
+                    filters = JsonConvert.DeserializeObject<List<VariableFilterDto>>(variableFilters);
+                }
+
+                var criteria = new FilterCriteriaDto
+                {
+                    ProcessDefinitionKey = processDefinitionKey,
+                    TaskDefinitionKey = taskDefinitionKey,
+                    Assignee = assignee,
+                    Variables = filters
+                };
+
+                var tasks = await _camundaService.GetTasksAsync(criteria);
+                return Ok(tasks);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error retrieving tasks: {ex.Message}");
+            }
+        }
+
+        [HttpGet("process-definitions")]
+        public async Task<ActionResult<IEnumerable<ProcessDefinitionDto>>> GetProcessDefinitions()
+        {
+            try
+            {
+                var processDefinitions = await _camundaService.GetProcessDefinitionsAsync();
+                return Ok(processDefinitions);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error retrieving process definitions: {ex.Message}");
+            }
+        }
+
+        [HttpGet("task-definitions")]
+        public async Task<ActionResult<IEnumerable<TaskDefinitionDto>>> GetTaskDefinitions()
+        {
+            try
+            {
+                var taskDefinitions = await _camundaService.GetTaskDefinitionsAsync();
+                return Ok(taskDefinitions);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error retrieving task definitions: {ex.Message}");
+            }
+        }
+
+        [HttpGet("process-instances/{processInstanceId}/variables")]
+        public async Task<ActionResult<Dictionary<string, object>>> GetProcessVariables(string processInstanceId)
+        {
+            try
+            {
+                var variables = await _camundaService.GetProcessVariablesAsync(processInstanceId);
+                return Ok(variables);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error retrieving process variables: {ex.Message}");
+            }
+        }
+
+        [HttpGet("tasks/{taskId}/variables")]
+        public async Task<ActionResult<Dictionary<string, object>>> GetTaskVariables(string taskId)
+        {
+            try
+            {
+                var variables = await _camundaService.GetTaskVariablesAsync(taskId);
+                return Ok(variables);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error retrieving task variables: {ex.Message}");
+            }
+        }
+    }
+
+    // DTOs
+    public class ProcessInstanceDto
+    {
+        public string Id { get; set; }
+        public string ProcessDefinitionId { get; set; }
+        public string ProcessDefinitionKey { get; set; }
+        public string BusinessKey { get; set; }
+        public DateTime StartTime { get; set; }
+        public DateTime? EndTime { get; set; }
+        public Dictionary<string, object> Variables { get; set; }
+    }
+
+    public class TaskDto
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public string ProcessInstanceId { get; set; }
+        public string ProcessDefinitionKey { get; set; }
+        public string TaskDefinitionKey { get; set; }
+        public string Assignee { get; set; }
+        public DateTime Created { get; set; }
+        public DateTime? Due { get; set; }
+        public Dictionary<string, object> Variables { get; set; }
+    }
+
+    public class ProcessDefinitionDto
+    {
+        public string Key { get; set; }
+        public string Name { get; set; }
+    }
+
+    public class TaskDefinitionDto
+    {
+        public string Key { get; set; }
+        public string Name { get; set; }
+    }
+
+    public class VariableFilterDto
+    {
+        public string Name { get; set; }
+        public string Operator { get; set; }
+        public object Value { get; set; }
+        public string Type { get; set; }
+    }
+
+    public class FilterCriteriaDto
+    {
+        public string ProcessDefinitionKey { get; set; }
+        public string TaskDefinitionKey { get; set; }
+        public string Assignee { get; set; }
+        public List<VariableFilterDto> Variables { get; set; } = new List<VariableFilterDto>();
+    }
+}
