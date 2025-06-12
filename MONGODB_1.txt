@@ -1,0 +1,503 @@
+// ============================================
+// 1. MONGODB COMMENT MODEL (.NET)
+// ============================================
+
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+using System.ComponentModel.DataAnnotations;
+
+namespace CommentSystem.Models
+{
+    public class Comment
+    {
+        [BsonId]
+        [BsonRepresentation(BsonType.ObjectId)]
+        public string Id { get; set; }
+
+        [BsonElement("content")]
+        [Required]
+        public string Content { get; set; }
+
+        [BsonElement("authorId")]
+        [Required]
+        public string AuthorId { get; set; }
+
+        [BsonElement("authorName")]
+        [Required]
+        public string AuthorName { get; set; }
+
+        [BsonElement("authorEmail")]
+        public string AuthorEmail { get; set; }
+
+        [BsonElement("postId")]
+        public string PostId { get; set; }
+
+        [BsonElement("parentCommentId")]
+        public string ParentCommentId { get; set; }
+
+        [BsonElement("status")]
+        public CommentStatus Status { get; set; } = CommentStatus.Active;
+
+        [BsonElement("isApproved")]
+        public bool IsApproved { get; set; } = true;
+
+        [BsonElement("likeCount")]
+        public int LikeCount { get; set; } = 0;
+
+        [BsonElement("replyCount")]
+        public int ReplyCount { get; set; } = 0;
+
+        [BsonElement("tags")]
+        public List<string> Tags { get; set; } = new List<string>();
+
+        [BsonElement("createdAt")]
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        [BsonElement("updatedAt")]
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        [BsonElement("ipAddress")]
+        public string IpAddress { get; set; }
+
+        [BsonElement("userAgent")]
+        public string UserAgent { get; set; }
+    }
+
+    public enum CommentStatus
+    {
+        Active = 1,
+        Hidden = 2,
+        Deleted = 3,
+        Flagged = 4,
+        Pending = 5
+    }
+
+    // Filter DTO for API requests
+    public class CommentFilterDto
+    {
+        public string SearchTerm { get; set; }
+        public string AuthorId { get; set; }
+        public string AuthorName { get; set; }
+        public string PostId { get; set; }
+        public string ParentCommentId { get; set; }
+        public CommentStatus? Status { get; set; }
+        public bool? IsApproved { get; set; }
+        public DateTime? CreatedFrom { get; set; }
+        public DateTime? CreatedTo { get; set; }
+        public List<string> Tags { get; set; }
+        public int? MinLikes { get; set; }
+        public int? MaxLikes { get; set; }
+        public string SortBy { get; set; } = "createdAt";
+        public string SortOrder { get; set; } = "desc";
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 10;
+    }
+
+    // Response DTO
+    public class CommentResponseDto
+    {
+        public string Id { get; set; }
+        public string Content { get; set; }
+        public string AuthorId { get; set; }
+        public string AuthorName { get; set; }
+        public string PostId { get; set; }
+        public string ParentCommentId { get; set; }
+        public CommentStatus Status { get; set; }
+        public bool IsApproved { get; set; }
+        public int LikeCount { get; set; }
+        public int ReplyCount { get; set; }
+        public List<string> Tags { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
+    }
+
+    public class PagedResult<T>
+    {
+        public List<T> Data { get; set; }
+        public int TotalCount { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int TotalPages { get; set; }
+        public bool HasNextPage { get; set; }
+        public bool HasPreviousPage { get; set; }
+    }
+}
+
+// ============================================
+// 2. MONGODB REPOSITORY (.NET)
+// ============================================
+
+using MongoDB.Driver;
+using MongoDB.Bson;
+using CommentSystem.Models;
+
+namespace CommentSystem.Repositories
+{
+    public interface ICommentRepository
+    {
+        Task<PagedResult<CommentResponseDto>> GetFilteredCommentsAsync(CommentFilterDto filter);
+        Task<Comment> GetByIdAsync(string id);
+        Task<Comment> CreateAsync(Comment comment);
+        Task<bool> UpdateAsync(string id, Comment comment);
+        Task<bool> DeleteAsync(string id);
+    }
+
+    public class CommentRepository : ICommentRepository
+    {
+        private readonly IMongoCollection<Comment> _comments;
+
+        public CommentRepository(IMongoDatabase database)
+        {
+            _comments = database.GetCollection<Comment>("comments");
+            
+            // Create indexes for better performance
+            CreateIndexes();
+        }
+
+        private void CreateIndexes()
+        {
+            var indexKeysDefinition = Builders<Comment>.IndexKeys
+                .Ascending(c => c.PostId)
+                .Ascending(c => c.AuthorId)
+                .Descending(c => c.CreatedAt);
+            
+            _comments.Indexes.CreateOne(new CreateIndexModel<Comment>(indexKeysDefinition));
+
+            // Text index for search
+            var textIndex = Builders<Comment>.IndexKeys.Text(c => c.Content).Text(c => c.AuthorName);
+            _comments.Indexes.CreateOne(new CreateIndexModel<Comment>(textIndex));
+        }
+
+        public async Task<PagedResult<CommentResponseDto>> GetFilteredCommentsAsync(CommentFilterDto filter)
+        {
+            var filterBuilder = Builders<Comment>.Filter;
+            var filters = new List<FilterDefinition<Comment>>();
+
+            // Search term filter (searches in content and author name)
+            if (!string.IsNullOrEmpty(filter.SearchTerm))
+            {
+                filters.Add(filterBuilder.Text(filter.SearchTerm));
+            }
+
+            // Author filters
+            if (!string.IsNullOrEmpty(filter.AuthorId))
+            {
+                filters.Add(filterBuilder.Eq(c => c.AuthorId, filter.AuthorId));
+            }
+
+            if (!string.IsNullOrEmpty(filter.AuthorName))
+            {
+                filters.Add(filterBuilder.Regex(c => c.AuthorName, new BsonRegularExpression(filter.AuthorName, "i")));
+            }
+
+            // Post filter
+            if (!string.IsNullOrEmpty(filter.PostId))
+            {
+                filters.Add(filterBuilder.Eq(c => c.PostId, filter.PostId));
+            }
+
+            // Parent comment filter (for replies)
+            if (!string.IsNullOrEmpty(filter.ParentCommentId))
+            {
+                filters.Add(filterBuilder.Eq(c => c.ParentCommentId, filter.ParentCommentId));
+            }
+
+            // Status filter
+            if (filter.Status.HasValue)
+            {
+                filters.Add(filterBuilder.Eq(c => c.Status, filter.Status.Value));
+            }
+
+            // Approval filter
+            if (filter.IsApproved.HasValue)
+            {
+                filters.Add(filterBuilder.Eq(c => c.IsApproved, filter.IsApproved.Value));
+            }
+
+            // Date range filters
+            if (filter.CreatedFrom.HasValue)
+            {
+                filters.Add(filterBuilder.Gte(c => c.CreatedAt, filter.CreatedFrom.Value));
+            }
+
+            if (filter.CreatedTo.HasValue)
+            {
+                filters.Add(filterBuilder.Lte(c => c.CreatedAt, filter.CreatedTo.Value));
+            }
+
+            // Tags filter
+            if (filter.Tags != null && filter.Tags.Any())
+            {
+                filters.Add(filterBuilder.In(c => c.Tags, filter.Tags));
+            }
+
+            // Like count filters
+            if (filter.MinLikes.HasValue)
+            {
+                filters.Add(filterBuilder.Gte(c => c.LikeCount, filter.MinLikes.Value));
+            }
+
+            if (filter.MaxLikes.HasValue)
+            {
+                filters.Add(filterBuilder.Lte(c => c.LikeCount, filter.MaxLikes.Value));
+            }
+
+            // Combine all filters
+            var finalFilter = filters.Any() 
+                ? filterBuilder.And(filters) 
+                : filterBuilder.Empty;
+
+            // Sorting
+            var sortBuilder = Builders<Comment>.Sort;
+            SortDefinition<Comment> sort = filter.SortOrder.ToLower() == "asc" 
+                ? sortBuilder.Ascending(GetSortField(filter.SortBy))
+                : sortBuilder.Descending(GetSortField(filter.SortBy));
+
+            // Execute query with pagination
+            var totalCount = await _comments.CountDocumentsAsync(finalFilter);
+            var skip = (filter.Page - 1) * filter.PageSize;
+
+            var comments = await _comments
+                .Find(finalFilter)
+                .Sort(sort)
+                .Skip(skip)
+                .Limit(filter.PageSize)
+                .ToListAsync();
+
+            // Map to response DTOs
+            var commentDtos = comments.Select(MapToResponseDto).ToList();
+
+            var totalPages = (int)Math.Ceiling((double)totalCount / filter.PageSize);
+
+            return new PagedResult<CommentResponseDto>
+            {
+                Data = commentDtos,
+                TotalCount = (int)totalCount,
+                Page = filter.Page,
+                PageSize = filter.PageSize,
+                TotalPages = totalPages,
+                HasNextPage = filter.Page < totalPages,
+                HasPreviousPage = filter.Page > 1
+            };
+        }
+
+        private string GetSortField(string sortBy)
+        {
+            return sortBy?.ToLower() switch
+            {
+                "content" => nameof(Comment.Content),
+                "authorname" => nameof(Comment.AuthorName),
+                "likecount" => nameof(Comment.LikeCount),
+                "replycount" => nameof(Comment.ReplyCount),
+                "updatedat" => nameof(Comment.UpdatedAt),
+                _ => nameof(Comment.CreatedAt)
+            };
+        }
+
+        private CommentResponseDto MapToResponseDto(Comment comment)
+        {
+            return new CommentResponseDto
+            {
+                Id = comment.Id,
+                Content = comment.Content,
+                AuthorId = comment.AuthorId,
+                AuthorName = comment.AuthorName,
+                PostId = comment.PostId,
+                ParentCommentId = comment.ParentCommentId,
+                Status = comment.Status,
+                IsApproved = comment.IsApproved,
+                LikeCount = comment.LikeCount,
+                ReplyCount = comment.ReplyCount,
+                Tags = comment.Tags,
+                CreatedAt = comment.CreatedAt,
+                UpdatedAt = comment.UpdatedAt
+            };
+        }
+
+        public async Task<Comment> GetByIdAsync(string id)
+        {
+            return await _comments.Find(c => c.Id == id).FirstOrDefaultAsync();
+        }
+
+        public async Task<Comment> CreateAsync(Comment comment)
+        {
+            await _comments.InsertOneAsync(comment);
+            return comment;
+        }
+
+        public async Task<bool> UpdateAsync(string id, Comment comment)
+        {
+            comment.UpdatedAt = DateTime.UtcNow;
+            var result = await _comments.ReplaceOneAsync(c => c.Id == id, comment);
+            return result.ModifiedCount > 0;
+        }
+
+        public async Task<bool> DeleteAsync(string id)
+        {
+            var result = await _comments.DeleteOneAsync(c => c.Id == id);
+            return result.DeletedCount > 0;
+        }
+    }
+}
+
+// ============================================
+// 3. WEB API CONTROLLER (.NET)
+// ============================================
+
+using Microsoft.AspNetCore.Mvc;
+using CommentSystem.Models;
+using CommentSystem.Repositories;
+
+namespace CommentSystem.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class CommentsController : ControllerBase
+    {
+        private readonly ICommentRepository _commentRepository;
+
+        public CommentsController(ICommentRepository commentRepository)
+        {
+            _commentRepository = commentRepository;
+        }
+
+        [HttpGet]
+        public async Task<ActionResult<PagedResult<CommentResponseDto>>> GetComments([FromQuery] CommentFilterDto filter)
+        {
+            try
+            {
+                var result = await _commentRepository.GetFilteredCommentsAsync(filter);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error retrieving comments", error = ex.Message });
+            }
+        }
+
+        [HttpGet("{id}")]
+        public async Task<ActionResult<CommentResponseDto>> GetComment(string id)
+        {
+            try
+            {
+                var comment = await _commentRepository.GetByIdAsync(id);
+                if (comment == null)
+                {
+                    return NotFound(new { message = "Comment not found" });
+                }
+
+                return Ok(comment);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error retrieving comment", error = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        public async Task<ActionResult<Comment>> CreateComment([FromBody] Comment comment)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                var createdComment = await _commentRepository.CreateAsync(comment);
+                return CreatedAtAction(nameof(GetComment), new { id = createdComment.Id }, createdComment);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error creating comment", error = ex.Message });
+            }
+        }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateComment(string id, [FromBody] Comment comment)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                var updated = await _commentRepository.UpdateAsync(id, comment);
+                if (!updated)
+                {
+                    return NotFound(new { message = "Comment not found" });
+                }
+
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error updating comment", error = ex.Message });
+            }
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteComment(string id)
+        {
+            try
+            {
+                var deleted = await _commentRepository.DeleteAsync(id);
+                if (!deleted)
+                {
+                    return NotFound(new { message = "Comment not found" });
+                }
+
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error deleting comment", error = ex.Message });
+            }
+        }
+    }
+}
+
+// ============================================
+// 4. DEPENDENCY INJECTION SETUP (.NET)
+// ============================================
+
+// In Program.cs or Startup.cs
+using MongoDB.Driver;
+using CommentSystem.Repositories;
+
+// MongoDB configuration
+builder.Services.Configure<MongoDbSettings>(
+    builder.Configuration.GetSection("MongoDbSettings"));
+
+builder.Services.AddSingleton<IMongoClient>(serviceProvider =>
+{
+    var settings = builder.Configuration.GetSection("MongoDbSettings").Get<MongoDbSettings>();
+    return new MongoClient(settings.ConnectionString);
+});
+
+builder.Services.AddScoped(serviceProvider =>
+{
+    var client = serviceProvider.GetRequiredService<IMongoClient>();
+    var settings = builder.Configuration.GetSection("MongoDbSettings").Get<MongoDbSettings>();
+    return client.GetDatabase(settings.DatabaseName);
+});
+
+builder.Services.AddScoped<ICommentRepository, CommentRepository>();
+
+// MongoDB Settings class
+public class MongoDbSettings
+{
+    public string ConnectionString { get; set; }
+    public string DatabaseName { get; set; }
+}
+
+// appsettings.json
+/*
+{
+  "MongoDbSettings": {
+    "ConnectionString": "mongodb://localhost:27017",
+    "DatabaseName": "CommentSystemDb"
+  }
+}
+*/
