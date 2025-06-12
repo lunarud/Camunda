@@ -1,0 +1,320 @@
+# Angular app.module.ts
+import { NgModule } from '@angular/core';
+import { BrowserModule } from '@angular/platform-browser';
+import { ReactiveFormsModule } from '@angular/forms';
+import { HttpClientModule } from '@angular/common/http';
+
+import { AppComponent } from './app.component';
+import { CamundaFormComponent } from './camunda-form/camunda-form.component';
+
+@NgModule({
+  declarations: [
+    AppComponent,
+    CamundaFormComponent
+  ],
+  imports: [
+    BrowserModule,
+    ReactiveFormsModule,
+    HttpClientModule
+  ],
+  providers: [],
+  bootstrap: [AppComponent]
+})
+export class AppModule { }
+
+---
+
+# .NET appsettings.json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "JavaApp": {
+    "BaseUrl": "http://localhost:8080",
+    "AuthToken": "your-auth-token-here"
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=localhost;Database=CamundaIntegration;Trusted_Connection=true;"
+  }
+}
+
+---
+
+# .NET appsettings.Development.json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Debug",
+      "System": "Information",
+      "Microsoft": "Information"
+    }
+  },
+  "JavaApp": {
+    "BaseUrl": "http://localhost:8080",
+    "AuthToken": ""
+  }
+}
+
+---
+
+# Java application.yml
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: camunda-integration-service
+  
+  datasource:
+    url: jdbc:h2:mem:camunda
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+  
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+# Camunda BPM Configuration
+camunda:
+  bpm:
+    admin-user:
+      id: admin
+      password: admin
+      firstName: Admin
+      lastName: User
+      email: admin@example.com
+    filter:
+      create: All tasks
+    webapp:
+      index-redirect-enabled: true
+    database:
+      schema-update: true
+    job-execution:
+      enabled: true
+    metrics:
+      enabled: true
+      db-reporter-activate: true
+    history-level: audit
+
+# Logging configuration
+logging:
+  level:
+    com.example.camunda: DEBUG
+    org.camunda.bpm: INFO
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/camunda-integration.log
+
+# CORS Configuration
+cors:
+  allowed-origins: 
+    - http://localhost:4200
+    - https://localhost:5001
+  allowed-methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+  allowed-headers:
+    - "*"
+  allow-credentials: true
+
+---
+
+# Java pom.xml dependencies
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+    
+    <!-- Camunda BPM Spring Boot Starter -->
+    <dependency>
+        <groupId>org.camunda.bpm.springboot</groupId>
+        <artifactId>camunda-bpm-spring-boot-starter-webapp</artifactId>
+        <version>7.19.0</version>
+    </dependency>
+    
+    <dependency>
+        <groupId>org.camunda.bpm.springboot</groupId>
+        <artifactId>camunda-bpm-spring-boot-starter-rest</artifactId>
+        <version>7.19.0</version>
+    </dependency>
+    
+    <!-- H2 Database for development -->
+    <dependency>
+        <groupId>com.h2database</groupId>
+        <artifactId>h2</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+    
+    <!-- Lombok for reducing boilerplate code -->
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <optional>true</optional>
+    </dependency>
+    
+    <!-- JSON processing -->
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+    </dependency>
+    
+    <!-- Testing -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
+    
+    <dependency>
+        <groupId>org.camunda.bpm.assert</groupId>
+        <artifactId>camunda-bpm-assert</artifactId>
+        <version>15.0.0</version>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+
+---
+
+# .NET Project File (.csproj)
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Cors" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="6.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="6.0.0" />
+    <PackageReference Include="System.Text.Json" Version="6.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.2.3" />
+  </ItemGroup>
+
+</Project>
+
+---
+
+# Angular package.json (relevant dependencies)
+{
+  "name": "camunda-angular-app",
+  "version": "1.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "test": "ng test"
+  },
+  "dependencies": {
+    "@angular/animations": "^15.0.0",
+    "@angular/common": "^15.0.0",
+    "@angular/compiler": "^15.0.0",
+    "@angular/core": "^15.0.0",
+    "@angular/forms": "^15.0.0",
+    "@angular/platform-browser": "^15.0.0",
+    "@angular/platform-browser-dynamic": "^15.0.0",
+    "@angular/router": "^15.0.0",
+    "rxjs": "~7.5.0",
+    "tslib": "^2.3.0",
+    "zone.js": "~0.12.0"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^15.0.0",
+    "@angular/cli": "~15.0.0",
+    "@angular/compiler-cli": "^15.0.0",
+    "@types/node": "^12.11.1",
+    "typescript": "~4.8.0"
+  }
+}
+
+---
+
+# Docker Compose for development environment
+version: '3.8'
+
+services:
+  angular-app:
+    build:
+      context: ./angular-app
+      dockerfile: Dockerfile
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./angular-app:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    depends_on:
+      - dotnet-api
+
+  dotnet-api:
+    build:
+      context: ./dotnet-api
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5001"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=https://+:5001
+      - JavaApp__BaseUrl=http://java-app:8080
+    depends_on:
+      - java-app
+
+  java-app:
+    build:
+      context: ./java-app
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8080
+    volumes:
+      - ./java-app/logs:/app/logs
+
+  camunda-db:
+    image: postgres:13
+    environment:
+      - POSTGRES_DB=camunda
+      - POSTGRES_USER=camunda
+      - POSTGRES_PASSWORD=camunda
+    ports:
+      - "5432:5432"
+    volumes:
+      - camunda_data:/var/lib/postgresql/data
+
+volumes:
+  camunda_data:
