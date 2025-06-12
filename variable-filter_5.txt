@@ -1,0 +1,399 @@
+package com.example.camunda.service;
+
+import org.camunda.bpm.engine.ProcessEngine;
+import org.camunda.bpm.engine.RuntimeService;
+import org.camunda.bpm.engine.TaskService;
+import org.camunda.bpm.engine.RepositoryService;
+import org.camunda.bpm.engine.runtime.ProcessInstance;
+import org.camunda.bpm.engine.runtime.ProcessInstanceQuery;
+import org.camunda.bpm.engine.task.Task;
+import org.camunda.bpm.engine.task.TaskQuery;
+import org.camunda.bpm.engine.repository.ProcessDefinition;
+import org.camunda.bpm.engine.variable.VariableMap;
+import org.camunda.bpm.engine.variable.Variables;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+public class CamundaVariableFilterService {
+
+    @Autowired
+    private ProcessEngine processEngine;
+
+    @Autowired
+    private RuntimeService runtimeService;
+
+    @Autowired
+    private TaskService taskService;
+
+    @Autowired
+    private RepositoryService repositoryService;
+
+    public List<ProcessInstanceDto> getFilteredProcessInstances(FilterCriteria criteria) {
+        ProcessInstanceQuery query = runtimeService.createProcessInstanceQuery();
+
+        // Apply basic filters
+        if (criteria.getProcessDefinitionKey() != null && !criteria.getProcessDefinitionKey().isEmpty()) {
+            query.processDefinitionKey(criteria.getProcessDefinitionKey());
+        }
+
+        // Apply variable filters
+        if (criteria.getVariableFilters() != null && !criteria.getVariableFilters().isEmpty()) {
+            for (VariableFilter filter : criteria.getVariableFilters()) {
+                applyVariableFilterToProcessQuery(query, filter);
+            }
+        }
+
+        List<ProcessInstance> processInstances = query.list();
+        
+        return processInstances.stream()
+                .map(this::convertToProcessInstanceDto)
+                .collect(Collectors.toList());
+    }
+
+    public List<TaskDto> getFilteredTasks(FilterCriteria criteria) {
+        TaskQuery query = taskService.createTaskQuery();
+
+        // Apply basic filters
+        if (criteria.getProcessDefinitionKey() != null && !criteria.getProcessDefinitionKey().isEmpty()) {
+            query.processDefinitionKey(criteria.getProcessDefinitionKey());
+        }
+
+        if (criteria.getTaskDefinitionKey() != null && !criteria.getTaskDefinitionKey().isEmpty()) {
+            query.taskDefinitionKey(criteria.getTaskDefinitionKey());
+        }
+
+        if (criteria.getAssignee() != null && !criteria.getAssignee().isEmpty()) {
+            query.taskAssignee(criteria.getAssignee());
+        }
+
+        // Apply variable filters (process variables for tasks)
+        if (criteria.getVariableFilters() != null && !criteria.getVariableFilters().isEmpty()) {
+            for (VariableFilter filter : criteria.getVariableFilters()) {
+                applyVariableFilterToTaskQuery(query, filter);
+            }
+        }
+
+        List<Task> tasks = query.list();
+        
+        return tasks.stream()
+                .map(this::convertToTaskDto)
+                .collect(Collectors.toList());
+    }
+
+    public List<ProcessDefinitionDto> getProcessDefinitions() {
+        List<ProcessDefinition> definitions = repositoryService.createProcessDefinitionQuery()
+                .latestVersion()
+                .list();
+
+        return definitions.stream()
+                .map(def -> new ProcessDefinitionDto(def.getKey(), def.getName()))
+                .collect(Collectors.toList());
+    }
+
+    public List<TaskDefinitionDto> getTaskDefinitions() {
+        // Get unique task definition keys from active tasks
+        List<Task> tasks = taskService.createTaskQuery().list();
+        
+        return tasks.stream()
+                .filter(task -> task.getTaskDefinitionKey() != null)
+                .collect(Collectors.groupingBy(Task::getTaskDefinitionKey))
+                .entrySet().stream()
+                .map(entry -> new TaskDefinitionDto(entry.getKey(), entry.getValue().get(0).getName()))
+                .collect(Collectors.toList());
+    }
+
+    public Map<String, Object> getProcessVariables(String processInstanceId) {
+        VariableMap variables = runtimeService.getVariables(processInstanceId);
+        return new HashMap<>(variables);
+    }
+
+    public Map<String, Object> getTaskVariables(String taskId) {
+        VariableMap variables = taskService.getVariables(taskId);
+        return new HashMap<>(variables);
+    }
+
+    private void applyVariableFilterToProcessQuery(ProcessInstanceQuery query, VariableFilter filter) {
+        String name = filter.getName();
+        Object value = convertVariableValue(filter.getValue(), filter.getType());
+        String operator = filter.getOperator();
+
+        switch (operator.toLowerCase()) {
+            case "eq":
+                query.variableValueEquals(name, value);
+                break;
+            case "neq":
+                query.variableValueNotEquals(name, value);
+                break;
+            case "gt":
+                if (value instanceof Comparable) {
+                    query.variableValueGreaterThan(name, value);
+                }
+                break;
+            case "gteq":
+                if (value instanceof Comparable) {
+                    query.variableValueGreaterThanOrEqual(name, value);
+                }
+                break;
+            case "lt":
+                if (value instanceof Comparable) {
+                    query.variableValueLessThan(name, value);
+                }
+                break;
+            case "lteq":
+                if (value instanceof Comparable) {
+                    query.variableValueLessThanOrEqual(name, value);
+                }
+                break;
+            case "like":
+                if (value instanceof String) {
+                    query.variableValueLike(name, "%" + value + "%");
+                }
+                break;
+        }
+    }
+
+    private void applyVariableFilterToTaskQuery(TaskQuery query, VariableFilter filter) {
+        String name = filter.getName();
+        Object value = convertVariableValue(filter.getValue(), filter.getType());
+        String operator = filter.getOperator();
+
+        switch (operator.toLowerCase()) {
+            case "eq":
+                query.processVariableValueEquals(name, value);
+                break;
+            case "neq":
+                query.processVariableValueNotEquals(name, value);
+                break;
+            case "gt":
+                if (value instanceof Comparable) {
+                    query.processVariableValueGreaterThan(name, value);
+                }
+                break;
+            case "gteq":
+                if (value instanceof Comparable) {
+                    query.processVariableValueGreaterThanOrEqual(name, value);
+                }
+                break;
+            case "lt":
+                if (value instanceof Comparable) {
+                    query.processVariableValueLessThan(name, value);
+                }
+                break;
+            case "lteq":
+                if (value instanceof Comparable) {
+                    query.processVariableValueLessThanOrEqual(name, value);
+                }
+                break;
+            case "like":
+                if (value instanceof String) {
+                    query.processVariableValueLike(name, "%" + value + "%");
+                }
+                break;
+        }
+    }
+
+    private Object convertVariableValue(Object value, String type) {
+        if (value == null) return null;
+
+        try {
+            switch (type.toLowerCase()) {
+                case "integer":
+                    return Integer.valueOf(value.toString());
+                case "double":
+                    return Double.valueOf(value.toString());
+                case "boolean":
+                    return Boolean.valueOf(value.toString());
+                case "date":
+                    return java.sql.Date.valueOf(value.toString());
+                default:
+                    return value.toString();
+            }
+        } catch (Exception e) {
+            // Return original value if conversion fails
+            return value;
+        }
+    }
+
+    private ProcessInstanceDto convertToProcessInstanceDto(ProcessInstance instance) {
+        ProcessInstanceDto dto = new ProcessInstanceDto();
+        dto.setId(instance.getId());
+        dto.setProcessDefinitionId(instance.getProcessDefinitionId());
+        dto.setProcessDefinitionKey(instance.getProcessDefinitionKey());
+        dto.setBusinessKey(instance.getBusinessKey());
+        dto.setStartTime(instance.getStartTime());
+        dto.setEndTime(instance.getEndTime());
+        
+        // Get variables
+        Map<String, Object> variables = getProcessVariables(instance.getId());
+        dto.setVariables(variables);
+        
+        return dto;
+    }
+
+    private TaskDto convertToTaskDto(Task task) {
+        TaskDto dto = new TaskDto();
+        dto.setId(task.getId());
+        dto.setName(task.getName());
+        dto.setProcessInstanceId(task.getProcessInstanceId());
+        dto.setProcessDefinitionKey(task.getProcessDefinitionKey());
+        dto.setTaskDefinitionKey(task.getTaskDefinitionKey());
+        dto.setAssignee(task.getAssignee());
+        dto.setCreated(task.getCreateTime());
+        dto.setDue(task.getDueDate());
+        
+        // Get variables
+        Map<String, Object> variables = getTaskVariables(task.getId());
+        dto.setVariables(variables);
+        
+        return dto;
+    }
+
+    // DTOs
+    public static class ProcessInstanceDto {
+        private String id;
+        private String processDefinitionId;
+        private String processDefinitionKey;
+        private String businessKey;
+        private Date startTime;
+        private Date endTime;
+        private Map<String, Object> variables;
+
+        // Getters and setters
+        public String getId() { return id; }
+        public void setId(String id) { this.id = id; }
+        
+        public String getProcessDefinitionId() { return processDefinitionId; }
+        public void setProcessDefinitionId(String processDefinitionId) { this.processDefinitionId = processDefinitionId; }
+        
+        public String getProcessDefinitionKey() { return processDefinitionKey; }
+        public void setProcessDefinitionKey(String processDefinitionKey) { this.processDefinitionKey = processDefinitionKey; }
+        
+        public String getBusinessKey() { return businessKey; }
+        public void setBusinessKey(String businessKey) { this.businessKey = businessKey; }
+        
+        public Date getStartTime() { return startTime; }
+        public void setStartTime(Date startTime) { this.startTime = startTime; }
+        
+        public Date getEndTime() { return endTime; }
+        public void setEndTime(Date endTime) { this.endTime = endTime; }
+        
+        public Map<String, Object> getVariables() { return variables; }
+        public void setVariables(Map<String, Object> variables) { this.variables = variables; }
+    }
+
+    public static class TaskDto {
+        private String id;
+        private String name;
+        private String processInstanceId;
+        private String processDefinitionKey;
+        private String taskDefinitionKey;
+        private String assignee;
+        private Date created;
+        private Date due;
+        private Map<String, Object> variables;
+
+        // Getters and setters
+        public String getId() { return id; }
+        public void setId(String id) { this.id = id; }
+        
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+        
+        public String getProcessInstanceId() { return processInstanceId; }
+        public void setProcessInstanceId(String processInstanceId) { this.processInstanceId = processInstanceId; }
+        
+        public String getProcessDefinitionKey() { return processDefinitionKey; }
+        public void setProcessDefinitionKey(String processDefinitionKey) { this.processDefinitionKey = processDefinitionKey; }
+        
+        public String getTaskDefinitionKey() { return taskDefinitionKey; }
+        public void setTaskDefinitionKey(String taskDefinitionKey) { this.taskDefinitionKey = taskDefinitionKey; }
+        
+        public String getAssignee() { return assignee; }
+        public void setAssignee(String assignee) { this.assignee = assignee; }
+        
+        public Date getCreated() { return created; }
+        public void setCreated(Date created) { this.created = created; }
+        
+        public Date getDue() { return due; }
+        public void setDue(Date due) { this.due = due; }
+        
+        public Map<String, Object> getVariables() { return variables; }
+        public void setVariables(Map<String, Object> variables) { this.variables = variables; }
+    }
+
+    public static class ProcessDefinitionDto {
+        private String key;
+        private String name;
+
+        public ProcessDefinitionDto(String key, String name) {
+            this.key = key;
+            this.name = name;
+        }
+
+        public String getKey() { return key; }
+        public void setKey(String key) { this.key = key; }
+        
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+    }
+
+    public static class TaskDefinitionDto {
+        private String key;
+        private String name;
+
+        public TaskDefinitionDto(String key, String name) {
+            this.key = key;
+            this.name = name;
+        }
+
+        public String getKey() { return key; }
+        public void setKey(String key) { this.key = key; }
+        
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+    }
+
+    public static class FilterCriteria {
+        private String processDefinitionKey;
+        private String taskDefinitionKey;
+        private String assignee;
+        private List<VariableFilter> variableFilters;
+
+        // Getters and setters
+        public String getProcessDefinitionKey() { return processDefinitionKey; }
+        public void setProcessDefinitionKey(String processDefinitionKey) { this.processDefinitionKey = processDefinitionKey; }
+        
+        public String getTaskDefinitionKey() { return taskDefinitionKey; }
+        public void setTaskDefinitionKey(String taskDefinitionKey) { this.taskDefinitionKey = taskDefinitionKey; }
+        
+        public String getAssignee() { return assignee; }
+        public void setAssignee(String assignee) { this.assignee = assignee; }
+        
+        public List<VariableFilter> getVariableFilters() { return variableFilters; }
+        public void setVariableFilters(List<VariableFilter> variableFilters) { this.variableFilters = variableFilters; }
+    }
+
+    public static class VariableFilter {
+        private String name;
+        private String operator;
+        private Object value;
+        private String type;
+
+        // Getters and setters
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+        
+        public String getOperator() { return operator; }
+        public void setOperator(String operator) { this.operator = operator; }
+        
+        public Object getValue() { return value; }
+        public void setValue(Object value) { this.value = value; }
+        
+        public String getType() { return type; }
+        public void setType(String type) { this.type = type; }
+    }
+}
