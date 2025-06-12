@@ -1,0 +1,311 @@
+# Camunda Variable Filter Feature - Complete Implementation
+
+This implementation provides a comprehensive variable filtering system for Camunda workflows and tasks across Angular frontend, .NET backend, and Java Camunda integration.
+
+## Architecture Overview
+
+```
+Angular Frontend → .NET API → Camunda REST API
+                ↓
+           Java Camunda Service (Direct Camunda Engine Access)
+```
+
+## Features
+
+- **Advanced Variable Filtering**: Filter by variable name, operator (equals, not equals, greater than, less than, like), value, and type
+- **Multiple Data Types**: Support for String, Integer, Double, Boolean, and Date variables
+- **Process & Task Filtering**: Filter both process instances and tasks with the same criteria
+- **Real-time Results**: Dynamic filtering with immediate results
+- **Responsive UI**: Mobile-friendly interface with tabbed view
+- **Variable Inspection**: Click to view all variables for any process or task
+
+## Setup Instructions
+
+### 1. Angular Frontend Setup
+
+```bash
+# Install Angular CLI if not already installed
+npm install -g @angular/cli
+
+# Create new Angular project
+ng new camunda-filter-app
+cd camunda-filter-app
+
+# Install required dependencies
+npm install @angular/forms @angular/common/http
+```
+
+**Add to app.module.ts:**
+```typescript
+import { ReactiveFormsModule } from '@angular/forms';
+import { HttpClientModule } from '@angular/common/http';
+
+@NgModule({
+  imports: [
+    // ... other imports
+    ReactiveFormsModule,
+    HttpClientModule
+  ],
+  // ...
+})
+```
+
+### 2. .NET Backend Setup
+
+```bash
+# Create new .NET Web API project
+dotnet new webapi -n CamundaFilterApi
+cd CamundaFilterApi
+
+# Install required packages
+dotnet add package Newtonsoft.Json
+dotnet add package Microsoft.AspNetCore.Cors
+```
+
+**Project Structure:**
+```
+CamundaFilterApi/
+├── Controllers/
+│   └── CamundaController.cs
+├── Services/
+│   ├── ICamundaService.cs
+│   └── CamundaService.cs
+├── Program.cs
+└── appsettings.json
+```
+
+### 3. Java Camunda Service Setup
+
+```bash
+# Add to your existing Spring Boot Camunda project or create new one
+# Add these dependencies to pom.xml:
+```
+
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.camunda.bpm.springboot</groupId>
+        <artifactId>camunda-bpm-spring-boot-starter</artifactId>
+        <version>7.18.0</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+</dependencies>
+```
+
+## Configuration
+
+### Angular Environment Configuration
+
+**src/environments/environment.ts:**
+```typescript
+export const environment = {
+  production: false,
+  apiUrl: 'http://localhost:5000/api' // .NET API URL
+};
+```
+
+### .NET Configuration
+
+**appsettings.json:**
+```json
+{
+  "Camunda": {
+    "BaseUrl": "http://localhost:8080/engine-rest"
+  },
+  "Cors": {
+    "AllowedOrigins": ["http://localhost:4200"]
+  }
+}
+```
+
+### Java Camunda Configuration
+
+**application.yaml:**
+```yaml
+camunda:
+  bpm:
+    admin-user:
+      id: admin
+      password: admin
+    filter:
+      create: All tasks
+server:
+  port: 8080
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+```
+
+## Usage Examples
+
+### 1. Filter by Process Definition
+```typescript
+const criteria: FilterCriteria = {
+  processDefinitionKey: 'invoice-process',
+  variables: []
+};
+```
+
+### 2. Filter by Variable Values
+```typescript
+const criteria: FilterCriteria = {
+  variables: [
+    {
+      name: 'amount',
+      operator: 'gt',
+      value: 1000,
+      type: 'Double'
+    },
+    {
+      name: 'status',
+      operator: 'eq',
+      value: 'approved',
+      type: 'String'
+    }
+  ]
+};
+```
+
+### 3. Filter Tasks by Assignee and Variables
+```typescript
+const criteria: FilterCriteria = {
+  assignee: 'john.doe',
+  taskDefinitionKey: 'review-task',
+  variables: [
+    {
+      name: 'priority',
+      operator: 'eq',
+      value: 'high',
+      type: 'String'
+    }
+  ]
+};
+```
+
+### 4. Complex Date Range Filter
+```typescript
+const criteria: FilterCriteria = {
+  variables: [
+    {
+      name: 'startDate',
+      operator: 'gteq',
+      value: '2024-01-01',
+      type: 'Date'
+    },
+    {
+      name: 'endDate',
+      operator: 'lteq',
+      value: '2024-12-31',
+      type: 'Date'
+    }
+  ]
+};
+```
+
+## API Endpoints
+
+### .NET API Endpoints
+- `GET /api/process-instances` - Get filtered process instances
+- `GET /api/tasks` - Get filtered tasks
+- `GET /api/process-definitions` - Get available process definitions
+- `GET /api/task-definitions` - Get available task definitions
+- `GET /api/process-instances/{id}/variables` - Get process variables
+- `GET /api/tasks/{id}/variables` - Get task variables
+
+### Java API Endpoints
+- `POST /api/camunda/process-instances/filter` - Filter process instances
+- `POST /api/camunda/tasks/filter` - Filter tasks
+- `GET /api/camunda/process-definitions` - Get process definitions
+- `GET /api/camunda/task-definitions` - Get task definitions
+
+## Supported Operators
+
+| Operator | Description | Applicable Types |
+|----------|-------------|------------------|
+| `eq` | Equals | All |
+| `neq` | Not Equals | All |
+| `gt` | Greater Than | Number, Date |
+| `gteq` | Greater Than or Equal | Number, Date |
+| `lt` | Less Than | Number, Date |
+| `lteq` | Less Than or Equal | Number, Date |
+| `like` | Contains (case-sensitive) | String |
+
+## Variable Types
+
+- **String**: Text values
+- **Integer**: Whole numbers
+- **Double**: Decimal numbers
+- **Boolean**: true/false values
+- **Date**: Date values (ISO format recommended)
+
+## Running the Application
+
+### 1. Start Camunda Engine
+```bash
+# If using standalone Camunda
+./camunda-run.sh
+
+# If using embedded Camunda in Java app
+mvn spring-boot:run
+```
+
+### 2. Start .NET API
+```bash
+cd CamundaFilterApi
+dotnet run
+# API will be available at http://localhost:5000
+```
+
+### 3. Start Angular App
+```bash
+cd camunda-filter-app
+ng serve
+# App will be available at http://localhost:4200
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **CORS Errors**: Ensure CORS is properly configured in both .NET and Java applications
+2. **Connection Issues**: Verify Camunda REST API is accessible and URLs are correct
+3. **Variable Type Conversion**: Ensure variable values match their specified types
+4. **Missing Dependencies**: Check all required packages are installed
+
+### Debug Tips
+
+- Use browser developer tools to inspect network requests
+- Check Camunda Cockpit for process and task data
+- Verify REST API responses using tools like Postman
+- Enable detailed logging in .NET and Java applications
+
+## Customization Options
+
+### Adding New Operators
+1. Update the Angular component dropdown
+2. Add handling in .NET service conversion
+3. Implement in Java Camunda query building
+
+### Supporting Custom Variable Types
+1. Extend type dropdown in Angular
+2. Add conversion logic in both .NET and Java services
+3. Update variable display formatting
+
+### Adding Export Functionality
+```typescript
+exportResults() {
+  const data = this.activeTab === 'processes' ? this.processInstances : this.tasks;
+  const csv = this.convertToCSV(data);
+  this.downloadCSV(csv, `${this.activeTab}-${new Date().toISOString()}.csv`);
+}
+```
+
+This implementation provides a robust, scalable solution for filtering Camunda workflows and tasks based on process variables, with a modern Angular frontend and flexible backend architecture.
