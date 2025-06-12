@@ -1,0 +1,88 @@
+// camunda.service.ts
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { FilterCriteria, VariableFilter } from './variable-filter.component';
+
+export interface ProcessInstance {
+  id: string;
+  processDefinitionId: string;
+  processDefinitionKey: string;
+  businessKey: string;
+  startTime: string;
+  endTime?: string;
+  variables?: { [key: string]: any };
+}
+
+export interface Task {
+  id: string;
+  name: string;
+  processInstanceId: string;
+  processDefinitionKey: string;
+  taskDefinitionKey: string;
+  assignee?: string;
+  created: string;
+  due?: string;
+  variables?: { [key: string]: any };
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class CamundaService {
+  private baseUrl = 'http://localhost:5000/api'; // .NET API base URL
+
+  constructor(private http: HttpClient) {}
+
+  getProcessInstances(criteria: FilterCriteria): Observable<ProcessInstance[]> {
+    let params = new HttpParams();
+    
+    if (criteria.processDefinitionKey) {
+      params = params.set('processDefinitionKey', criteria.processDefinitionKey);
+    }
+    
+    if (criteria.variables && criteria.variables.length > 0) {
+      params = params.set('variableFilters', JSON.stringify(criteria.variables));
+    }
+
+    return this.http.get<ProcessInstance[]>(`${this.baseUrl}/process-instances`, { params });
+  }
+
+  getTasks(criteria: FilterCriteria): Observable<Task[]> {
+    let params = new HttpParams();
+    
+    if (criteria.processDefinitionKey) {
+      params = params.set('processDefinitionKey', criteria.processDefinitionKey);
+    }
+    
+    if (criteria.taskDefinitionKey) {
+      params = params.set('taskDefinitionKey', criteria.taskDefinitionKey);
+    }
+    
+    if (criteria.assignee) {
+      params = params.set('assignee', criteria.assignee);
+    }
+    
+    if (criteria.variables && criteria.variables.length > 0) {
+      params = params.set('variableFilters', JSON.stringify(criteria.variables));
+    }
+
+    return this.http.get<Task[]>(`${this.baseUrl}/tasks`, { params });
+  }
+
+  getProcessDefinitions(): Observable<{ key: string; name: string }[]> {
+    return this.http.get<{ key: string; name: string }[]>(`${this.baseUrl}/process-definitions`);
+  }
+
+  getTaskDefinitions(): Observable<{ key: string; name: string }[]> {
+    return this.http.get<{ key: string; name: string }[]>(`${this.baseUrl}/task-definitions`);
+  }
+
+  getProcessVariables(processInstanceId: string): Observable<{ [key: string]: any }> {
+    return this.http.get<{ [key: string]: any }>(`${this.baseUrl}/process-instances/${processInstanceId}/variables`);
+  }
+
+  getTaskVariables(taskId: string): Observable<{ [key: string]: any }> {
+    return this.http.get<{ [key: string]: any }>(`${this.baseUrl}/tasks/${taskId}/variables`);
+  }
+}
