@@ -1,0 +1,615 @@
+# Camunda Task Manager with Dynamic JSON Schema Forms
+
+## Architecture Overview
+
+The solution consists of:
+- **Frontend**: Angular with dynamic form generation
+- **Backend**: .NET API with schema validation
+- **Database**: MongoDB for storing schemas and workflow data
+- **Workflow Engine**: Camunda for process orchestration
+
+## 1. JSON Schema Structure
+
+### Base Schema Format
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "Task Form Schema",
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "title": "Task ID",
+      "readOnly": true
+    },
+    "priority": {
+      "type": "string",
+      "title": "Priority",
+      "enum": ["Low", "Medium", "High", "Critical"],
+      "default": "Medium"
+    },
+    "assignee": {
+      "type": "string",
+      "title": "Assignee",
+      "format": "email"
+    },
+    "dueDate": {
+      "type": "string",
+      "title": "Due Date",
+      "format": "date"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description",
+      "maxLength": 500
+    },
+    "tags": {
+      "type": "array",
+      "title": "Tags",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["assignee", "dueDate"],
+  "additionalProperties": false
+}
+```
+
+### Extended Schema with UI Hints
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "Enhanced Task Schema",
+  "properties": {
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": ["New", "In Progress", "Review", "Completed"],
+      "ui:widget": "select",
+      "ui:options": {
+        "enumOptions": [
+          {"value": "New", "label": "New"},
+          {"value": "In Progress", "label": "In Progress"},
+          {"value": "Review", "label": "Under Review"},
+          {"value": "Completed", "label": "Completed"}
+        ]
+      }
+    },
+    "attachments": {
+      "type": "array",
+      "title": "Attachments",
+      "items": {
+        "type": "object",
+        "properties": {
+          "filename": {"type": "string"},
+          "url": {"type": "string", "format": "uri"},
+          "size": {"type": "number"}
+        }
+      },
+      "ui:widget": "file-upload"
+    }
+  },
+  "ui:order": ["status", "priority", "assignee", "dueDate", "description", "tags", "attachments"]
+}
+```
+
+## 2. MongoDB Schema Storage
+
+### Schema Document Structure
+```javascript
+// MongoDB Collection: workflow_schemas
+{
+  _id: ObjectId("..."),
+  workflowKey: "task-approval-process",
+  taskDefinitionKey: "user-task-1",
+  version: "1.0",
+  schema: {
+    // JSON Schema object
+  },
+  uiSchema: {
+    // UI customization schema
+  },
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  isActive: true
+}
+```
+
+### Workflow Instance Data
+```javascript
+// MongoDB Collection: workflow_instances
+{
+  _id: ObjectId("..."),
+  processInstanceId: "camunda-process-instance-id",
+  taskId: "camunda-task-id",
+  workflowKey: "task-approval-process",
+  data: {
+    // Dynamic data based on schema
+  },
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```
+
+## 3. .NET Backend Implementation
+
+### Models
+```csharp
+public class WorkflowSchema
+{
+    public string Id { get; set; }
+    public string WorkflowKey { get; set; }
+    public string TaskDefinitionKey { get; set; }
+    public string Version { get; set; }
+    public JObject Schema { get; set; }
+    public JObject UiSchema { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public class WorkflowInstance
+{
+    public string Id { get; set; }
+    public string ProcessInstanceId { get; set; }
+    public string TaskId { get; set; }
+    public string WorkflowKey { get; set; }
+    public JObject Data { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+```
+
+### Repository Pattern
+```csharp
+public interface IWorkflowSchemaRepository
+{
+    Task<WorkflowSchema> GetSchemaAsync(string workflowKey, string taskDefinitionKey);
+    Task<List<WorkflowSchema>> GetAllSchemasAsync();
+    Task<WorkflowSchema> CreateSchemaAsync(WorkflowSchema schema);
+    Task<WorkflowSchema> UpdateSchemaAsync(WorkflowSchema schema);
+}
+
+public class WorkflowSchemaRepository : IWorkflowSchemaRepository
+{
+    private readonly IMongoCollection<WorkflowSchema> _schemas;
+
+    public WorkflowSchemaRepository(IMongoDatabase database)
+    {
+        _schemas = database.GetCollection<WorkflowSchema>("workflow_schemas");
+    }
+
+    public async Task<WorkflowSchema> GetSchemaAsync(string workflowKey, string taskDefinitionKey)
+    {
+        return await _schemas
+            .Find(s => s.WorkflowKey == workflowKey && 
+                      s.TaskDefinitionKey == taskDefinitionKey && 
+                      s.IsActive)
+            .FirstOrDefaultAsync();
+    }
+
+    // Additional repository methods...
+}
+```
+
+### API Controllers
+```csharp
+[ApiController]
+[Route("api/[controller]")]
+public class WorkflowController : ControllerBase
+{
+    private readonly IWorkflowSchemaRepository _schemaRepo;
+    private readonly IWorkflowInstanceRepository _instanceRepo;
+    private readonly ICamundaService _camundaService;
+
+    [HttpGet("schema/{workflowKey}/{taskDefinitionKey}")]
+    public async Task<ActionResult<WorkflowSchema>> GetSchema(
+        string workflowKey, 
+        string taskDefinitionKey)
+    {
+        var schema = await _schemaRepo.GetSchemaAsync(workflowKey, taskDefinitionKey);
+        return schema != null ? Ok(schema) : NotFound();
+    }
+
+    [HttpPost("task/{taskId}/submit")]
+    public async Task<ActionResult> SubmitTask(string taskId, [FromBody] JObject formData)
+    {
+        // Validate against schema
+        var task = await _camundaService.GetTaskAsync(taskId);
+        var schema = await _schemaRepo.GetSchemaAsync(
+            task.ProcessDefinitionKey, 
+            task.TaskDefinitionKey);
+
+        if (!ValidateAgainstSchema(formData, schema.Schema))
+        {
+            return BadRequest("Invalid form data");
+        }
+
+        // Complete Camunda task
+        await _camundaService.CompleteTaskAsync(taskId, formData);
+
+        return Ok();
+    }
+
+    private bool ValidateAgainstSchema(JObject data, JObject schema)
+    {
+        // Use Newtonsoft.Json.Schema for validation
+        var jsonSchema = JSchema.Parse(schema.ToString());
+        return data.IsValid(jsonSchema);
+    }
+}
+```
+
+## 4. Angular Frontend Implementation
+
+### Schema Service
+```typescript
+@Injectable({
+  providedIn: 'root'
+})
+export class SchemaService {
+  private apiUrl = 'https://your-api-url/api/workflow';
+
+  constructor(private http: HttpClient) {}
+
+  getSchema(workflowKey: string, taskDefinitionKey: string): Observable<WorkflowSchema> {
+    return this.http.get<WorkflowSchema>(`${this.apiUrl}/schema/${workflowKey}/${taskDefinitionKey}`);
+  }
+
+  submitTask(taskId: string, formData: any): Observable<any> {
+    return this.http.post(`${this.apiUrl}/task/${taskId}/submit`, formData);
+  }
+
+  getTasks(): Observable<CamundaTask[]> {
+    return this.http.get<CamundaTask[]>(`${this.apiUrl}/tasks`);
+  }
+}
+```
+
+### Dynamic Form Component
+```typescript
+@Component({
+  selector: 'app-dynamic-form',
+  template: `
+    <form [formGroup]="dynamicForm" (ngSubmit)="onSubmit()">
+      <div *ngFor="let field of formFields" class="form-field">
+        <ng-container [ngSwitch]="field.type">
+          
+          <div *ngSwitchCase="'string'">
+            <label>{{ field.title }}</label>
+            <input 
+              *ngIf="field.format !== 'date'"
+              [formControlName]="field.key"
+              [type]="getInputType(field)"
+              class="form-control">
+            <input 
+              *ngIf="field.format === 'date'"
+              [formControlName]="field.key"
+              type="date"
+              class="form-control">
+          </div>
+
+          <div *ngSwitchCase="'enum'">
+            <label>{{ field.title }}</label>
+            <select [formControlName]="field.key" class="form-control">
+              <option *ngFor="let option of field.options" [value]="option">
+                {{ option }}
+              </option>
+            </select>
+          </div>
+
+          <div *ngSwitchCase="'array'">
+            <label>{{ field.title }}</label>
+            <div formArrayName="{{ field.key }}">
+              <div *ngFor="let item of getFormArray(field.key).controls; let i = index">
+                <input [formControlName]="i" class="form-control">
+                <button type="button" (click)="removeArrayItem(field.key, i)">Remove</button>
+              </div>
+              <button type="button" (click)="addArrayItem(field.key)">Add {{ field.title }}</button>
+            </div>
+          </div>
+
+        </ng-container>
+      </div>
+      
+      <button type="submit" [disabled]="!dynamicForm.valid">Submit</button>
+    </form>
+  `
+})
+export class DynamicFormComponent implements OnInit {
+  @Input() taskId!: string;
+  @Input() workflowKey!: string;
+  @Input() taskDefinitionKey!: string;
+  
+  dynamicForm!: FormGroup;
+  formFields: FormField[] = [];
+  schema!: WorkflowSchema;
+
+  constructor(
+    private fb: FormBuilder,
+    private schemaService: SchemaService
+  ) {}
+
+  ngOnInit() {
+    this.loadSchema();
+  }
+
+  loadSchema() {
+    this.schemaService.getSchema(this.workflowKey, this.taskDefinitionKey)
+      .subscribe(schema => {
+        this.schema = schema;
+        this.buildForm(schema);
+      });
+  }
+
+  buildForm(schema: WorkflowSchema) {
+    const formControls: { [key: string]: FormControl | FormArray } = {};
+    this.formFields = [];
+
+    Object.entries(schema.schema.properties).forEach(([key, property]: [string, any]) => {
+      const field: FormField = {
+        key,
+        type: property.type,
+        title: property.title || key,
+        required: schema.schema.required?.includes(key) || false,
+        options: property.enum,
+        format: property.format
+      };
+
+      this.formFields.push(field);
+
+      if (property.type === 'array') {
+        formControls[key] = this.fb.array([]);
+      } else {
+        const validators = this.getValidators(property, field.required);
+        formControls[key] = new FormControl(property.default || '', validators);
+      }
+    });
+
+    this.dynamicForm = this.fb.group(formControls);
+  }
+
+  getValidators(property: any, required: boolean): ValidatorFn[] {
+    const validators: ValidatorFn[] = [];
+    
+    if (required) validators.push(Validators.required);
+    if (property.format === 'email') validators.push(Validators.email);
+    if (property.maxLength) validators.push(Validators.maxLength(property.maxLength));
+    if (property.pattern) validators.push(Validators.pattern(property.pattern));
+    
+    return validators;
+  }
+
+  getInputType(field: FormField): string {
+    if (field.format === 'email') return 'email';
+    if (field.format === 'date') return 'date';
+    return 'text';
+  }
+
+  getFormArray(fieldName: string): FormArray {
+    return this.dynamicForm.get(fieldName) as FormArray;
+  }
+
+  addArrayItem(fieldName: string) {
+    const formArray = this.getFormArray(fieldName);
+    formArray.push(new FormControl(''));
+  }
+
+  removeArrayItem(fieldName: string, index: number) {
+    const formArray = this.getFormArray(fieldName);
+    formArray.removeAt(index);
+  }
+
+  onSubmit() {
+    if (this.dynamicForm.valid) {
+      this.schemaService.submitTask(this.taskId, this.dynamicForm.value)
+        .subscribe(
+          response => console.log('Task submitted successfully'),
+          error => console.error('Error submitting task', error)
+        );
+    }
+  }
+}
+```
+
+### DataGrid Component
+```typescript
+@Component({
+  selector: 'app-task-grid',
+  template: `
+    <div class="task-grid">
+      <table class="table">
+        <thead>
+          <tr>
+            <th *ngFor="let column of displayColumns">{{ column.title }}</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let task of tasks">
+            <td *ngFor="let column of displayColumns">
+              {{ getDisplayValue(task, column) }}
+            </td>
+            <td>
+              <button (click)="openTaskForm(task)">Edit</button>
+              <button (click)="completeTask(task)">Complete</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `
+})
+export class TaskGridComponent implements OnInit {
+  tasks: CamundaTask[] = [];
+  displayColumns: GridColumn[] = [];
+  schemas: Map<string, WorkflowSchema> = new Map();
+
+  constructor(private schemaService: SchemaService) {}
+
+  ngOnInit() {
+    this.loadTasks();
+  }
+
+  loadTasks() {
+    this.schemaService.getTasks().subscribe(tasks => {
+      this.tasks = tasks;
+      this.loadSchemasForTasks(tasks);
+    });
+  }
+
+  loadSchemasForTasks(tasks: CamundaTask[]) {
+    const uniqueTaskTypes = [...new Set(tasks.map(t => `${t.processDefinitionKey}-${t.taskDefinitionKey}`))];
+    
+    uniqueTaskTypes.forEach(taskType => {
+      const [workflowKey, taskDefinitionKey] = taskType.split('-');
+      this.schemaService.getSchema(workflowKey, taskDefinitionKey)
+        .subscribe(schema => {
+          this.schemas.set(taskType, schema);
+          this.updateDisplayColumns();
+        });
+    });
+  }
+
+  updateDisplayColumns() {
+    const allColumns = new Set<string>();
+    
+    this.schemas.forEach(schema => {
+      Object.keys(schema.schema.properties).forEach(key => {
+        allColumns.add(key);
+      });
+    });
+
+    this.displayColumns = Array.from(allColumns).map(key => ({
+      key,
+      title: this.getColumnTitle(key)
+    }));
+  }
+
+  getColumnTitle(key: string): string {
+    for (const schema of this.schemas.values()) {
+      if (schema.schema.properties[key]) {
+        return schema.schema.properties[key].title || key;
+      }
+    }
+    return key;
+  }
+
+  getDisplayValue(task: CamundaTask, column: GridColumn): string {
+    const value = task.variables?.[column.key];
+    return value ? String(value) : '-';
+  }
+
+  openTaskForm(task: CamundaTask) {
+    // Navigate to dynamic form component
+  }
+
+  completeTask(task: CamundaTask) {
+    // Handle task completion
+  }
+}
+```
+
+## 5. Integration with Camunda
+
+### Camunda Service
+```typescript
+@Injectable({
+  providedIn: 'root'
+})
+export class CamundaService {
+  private camundaUrl = 'http://localhost:8080/engine-rest';
+
+  constructor(private http: HttpClient) {}
+
+  getTasks(): Observable<CamundaTask[]> {
+    return this.http.get<CamundaTask[]>(`${this.camundaUrl}/task`);
+  }
+
+  getTask(taskId: string): Observable<CamundaTask> {
+    return this.http.get<CamundaTask>(`${this.camundaUrl}/task/${taskId}`);
+  }
+
+  completeTask(taskId: string, variables: any): Observable<any> {
+    const payload = {
+      variables: this.convertToVariables(variables)
+    };
+    return this.http.post(`${this.camundaUrl}/task/${taskId}/complete`, payload);
+  }
+
+  private convertToVariables(data: any): any {
+    const variables: any = {};
+    Object.entries(data).forEach(([key, value]) => {
+      variables[key] = { value };
+    });
+    return variables;
+  }
+}
+```
+
+## 6. Advanced Features
+
+### Schema Versioning
+- Store multiple versions of schemas
+- Handle schema migration for existing workflow instances
+- Implement backward compatibility
+
+### Conditional Fields
+```json
+{
+  "properties": {
+    "taskType": {
+      "type": "string",
+      "enum": ["Bug", "Feature", "Enhancement"]
+    },
+    "bugSeverity": {
+      "type": "string",
+      "enum": ["Low", "Medium", "High"],
+      "dependencies": {
+        "taskType": ["Bug"]
+      }
+    }
+  }
+}
+```
+
+### Custom Validators
+```typescript
+export class CustomValidators {
+  static futureDate(control: AbstractControl): ValidationErrors | null {
+    const value = control.value;
+    if (value && new Date(value) <= new Date()) {
+      return { futureDate: true };
+    }
+    return null;
+  }
+}
+```
+
+### File Upload Support
+```typescript
+// In your dynamic form component
+handleFileUpload(field: FormField, event: any) {
+  const files = event.target.files;
+  if (files && files.length > 0) {
+    // Handle file upload logic
+    this.uploadFile(files[0]).subscribe(response => {
+      this.dynamicForm.get(field.key)?.setValue(response.url);
+    });
+  }
+}
+```
+
+## 7. Best Practices
+
+1. **Schema Design**: Keep schemas simple and focused on business requirements
+2. **Validation**: Always validate on both client and server sides
+3. **Performance**: Cache schemas and implement efficient MongoDB queries
+4. **Security**: Validate permissions before allowing form submissions
+5. **Testing**: Create comprehensive tests for schema validation and form generation
+6. **Error Handling**: Implement proper error handling for schema loading failures
+7. **Accessibility**: Ensure generated forms are accessible with proper ARIA labels
+
+This architecture provides a flexible, maintainable solution for dynamic form generation based on JSON schemas in a Camunda workflow environment.
