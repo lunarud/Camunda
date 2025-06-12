@@ -1,0 +1,1285 @@
+### Repository Pattern with MongoDB
+
+```csharp
+// Base Repository Interface
+public interface IMongoRepository<TDocument> where TDocument : IDocument
+{
+    IQueryable<TDocument> AsQueryable();
+    
+    IEnumerable<TDocument> FilterBy(
+        Expression<Func<TDocument, bool>> filterExpression);
+
+    IEnumerable<TProjected> FilterBy<TProjected>(
+        Expression<Func<TDocument, bool>> filterExpression,
+        Expression<Func<TDocument, TProjected>> projectionExpression);
+
+    TDocument FindOne(Expression<Func<TDocument, bool>> filterExpression);
+
+    Task<TDocument> FindOneAsync(Expression<Func<TDocument, bool>> filterExpression);
+
+    TDocument FindById(string id);
+
+    Task<TDocument> FindByIdAsync(string id);
+
+    void InsertOne(TDocument document);
+
+    Task InsertOneAsync(TDocument document);
+
+    void InsertMany(ICollection<TDocument> documents);
+
+    Task InsertManyAsync(ICollection<TDocument> documents);
+
+    void ReplaceOne(TDocument document);
+
+    Task ReplaceOneAsync(TDocument document);
+
+    void DeleteOne(Expression<Func<TDocument, bool>> filterExpression);
+
+    Task DeleteOneAsync(Expression<Func<TDocument, bool>> filterExpression);
+
+    void DeleteById(string id);
+
+    Task DeleteByIdAsync(string id);
+
+    void DeleteMany(Expression<Func<TDocument, bool>> filterExpression);
+
+    Task DeleteManyAsync(Expression<Func<TDocument, bool>> filterExpression);
+}
+
+// Base Document Interface
+public interface IDocument
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    string Id { get; set; }
+
+    DateTime CreatedAt { get; }
+}
+
+// MongoDB Repository Implementation
+public class MongoRepository<TDocument> : IMongoRepository<TDocument>
+    where TDocument : IDocument
+{
+    private readonly IMongoCollection<TDocument> _collection;
+
+    public MongoRepository(IMongoDbContext context)
+    {
+        _collection = context.GetCollection<TDocument>(GetCollectionName(typeof(TDocument)));
+    }
+
+    private# Camunda Workflow & Task Manager - Complete Design
+
+## Architecture Overview
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Angular UI    │────│   .NET Web API   │────│   SQL Server    │
+│   (Frontend)    │    │   (Backend)      │    │   (Database)    │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                                │
+                                │
+                       ┌──────────────────┐
+                       │  Camunda Engine  │
+                       │  (External API)  │
+                       └──────────────────┘
+```
+
+## MongoDB Schema Design
+
+### Collections Structure
+
+```javascript
+// Users Collection
+{
+  "_id": ObjectId("..."),
+  "username": "john.doe",
+  "email": "john.doe@company.com",
+  "fullName": "John Doe",
+  "role": "Manager", // Admin, Manager, User
+  "isActive": true,
+  "groups": [ObjectId("..."), ObjectId("...")], // Reference to Groups
+  "preferences": {
+    "timezone": "UTC",
+    "language": "en",
+    "notifications": {
+      "email": true,
+      "inApp": true
+    }
+  },
+  "createdAt": ISODate("..."),
+  "updatedAt": ISODate("...")
+}
+
+// Process Definitions Collection
+{
+  "_id": ObjectId("..."),
+  "camundaProcessDefinitionId": "process_definition_1:1:123",
+  "name": "Employee Onboarding",
+  "description": "Complete employee onboarding process",
+  "version": 1,
+  "bpmnXml": "<bpmn:definitions...>",
+  "isActive": true,
+  "createdBy": ObjectId("..."), // Reference to Users
+  "tags": ["hr", "onboarding", "employee"],
+  "metadata": {
+    "category": "HR",
+    "estimatedDuration": 7200, // seconds
+    "complexity": "Medium"
+  },
+  "createdAt": ISODate("..."),
+  "updatedAt": ISODate("...")
+}
+
+// Process Instances Collection
+{
+  "_id": ObjectId("..."),
+  "camundaProcessInstanceId": "process_instance_123",
+  "processDefinitionId": ObjectId("..."), // Reference to ProcessDefinitions
+  "businessKey": "EMP-001-2025",
+  "status": "Active", // Active, Completed, Suspended, Terminated
+  "startedBy": ObjectId("..."), // Reference to Users
+  "startedAt": ISODate("..."),
+  "endedAt": null,
+  "variables": {
+    "employeeName": "Jane Smith",
+    "department": "Engineering",
+    "startDate": ISODate("..."),
+    "salary": 75000
+  },
+  "priority": 50,
+  "dueDate": ISODate("..."),
+  "metrics": {
+    "duration": 3600, // seconds
+    "tasksCompleted": 5,
+    "tasksTotal": 8
+  },
+  "createdAt": ISODate("..."),
+  "updatedAt": ISODate("...")
+}
+
+// Tasks Collection
+{
+  "_id": ObjectId("..."),
+  "camundaTaskId": "task_123",
+  "processInstanceId": ObjectId("..."), // Reference to ProcessInstances
+  "name": "Review Employee Documents",
+  "description": "Review and approve employee documentation",
+  "taskDefinitionKey": "review_documents",
+  "assigneeId": ObjectId("..."), // Reference to Users
+  "candidateGroups": ["hr_reviewers", "managers"],
+  "candidateUsers": [ObjectId("..."), ObjectId("...")],
+  "status": "Assigned", // Created, Assigned, InProgress, Completed, Cancelled
+  "priority": 75,
+  "dueDate": ISODate("..."),
+  "followUpDate": ISODate("..."),
+  "createdAt": ISODate("..."),
+  "claimedAt": ISODate("..."),
+  "completedAt": null,
+  "formKey": "employee_review_form",
+  "variables": {
+    "reviewType": "standard",
+    "documentsRequired": ["contract", "id", "tax_forms"]
+  },
+  "comments": [
+    {
+      "_id": ObjectId("..."),
+      "userId": ObjectId("..."),
+      "comment": "Documents look good, just need tax forms",
+      "createdAt": ISODate("...")
+    }
+  ],
+  "history": [
+    {
+      "_id": ObjectId("..."),
+      "userId": ObjectId("..."),
+      "action": "Created",
+      "details": "Task created by system",
+      "timestamp": ISODate("...")
+    },
+    {
+      "_id": ObjectId("..."),
+      "userId": ObjectId("..."),
+      "action": "Assigned",
+      "details": "Task assigned to John Doe",
+      "timestamp": ISODate("...")
+    }
+  ],
+  "attachments": [
+    {
+      "_id": ObjectId("..."),
+      "fileName": "employee_contract.pdf",
+      "fileSize": 2048000,
+      "contentType": "application/pdf",
+      "uploadedBy": ObjectId("..."),
+      "uploadedAt": ISODate("...")
+    }
+  ]
+}
+
+// Groups Collection
+{
+  "_id": ObjectId("..."),
+  "name": "HR Reviewers",
+  "description": "Human Resources review team",
+  "isActive": true,
+  "permissions": ["review_tasks", "approve_documents"],
+  "members": [ObjectId("..."), ObjectId("...")], // Reference to Users
+  "createdAt": ISODate("..."),
+  "updatedAt": ISODate("...")
+}
+
+// Notifications Collection
+{
+  "_id": ObjectId("..."),
+  "userId": ObjectId("..."), // Reference to Users
+  "taskId": ObjectId("..."), // Reference to Tasks (optional)
+  "processInstanceId": ObjectId("..."), // Reference to ProcessInstances (optional)
+  "type": "TaskAssigned", // TaskAssigned, TaskDue, ProcessCompleted, etc.
+  "title": "New Task Assigned",
+  "message": "You have been assigned a new task: Review Employee Documents",
+  "isRead": false,
+  "priority": "normal", // low, normal, high, urgent
+  "actionUrl": "/tasks/64f1a2b3c4d5e6f7g8h9i0j1",
+  "createdAt": ISODate("..."),
+  "readAt": null
+}
+
+// Analytics Collection (for reporting and metrics)
+{
+  "_id": ObjectId("..."),
+  "type": "task_completion",
+  "date": ISODate("..."),
+  "userId": ObjectId("..."),
+  "taskId": ObjectId("..."),
+  "processInstanceId": ObjectId("..."),
+  "metrics": {
+    "completionTime": 3600, // seconds
+    "overdue": false,
+    "reassignments": 0
+  },
+  "createdAt": ISODate("...")
+}
+```
+
+### MongoDB Indexes
+
+```javascript
+// Users Collection Indexes
+db.users.createIndex({ "username": 1 }, { unique: true });
+db.users.createIndex({ "email": 1 }, { unique: true });
+db.users.createIndex({ "role": 1 });
+db.users.createIndex({ "isActive": 1 });
+
+// Process Definitions Collection Indexes
+db.processDefinitions.createIndex({ "camundaProcessDefinitionId": 1 }, { unique: true });
+db.processDefinitions.createIndex({ "name": 1 });
+db.processDefinitions.createIndex({ "isActive": 1 });
+db.processDefinitions.createIndex({ "tags": 1 });
+
+// Process Instances Collection Indexes
+db.processInstances.createIndex({ "camundaProcessInstanceId": 1 }, { unique: true });
+db.processInstances.createIndex({ "processDefinitionId": 1 });
+db.processInstances.createIndex({ "status": 1 });
+db.processInstances.createIndex({ "startedBy": 1 });
+db.processInstances.createIndex({ "startedAt": 1 });
+db.processInstances.createIndex({ "dueDate": 1 });
+db.processInstances.createIndex({ "businessKey": 1 });
+
+// Tasks Collection Indexes
+db.tasks.createIndex({ "camundaTaskId": 1 }, { unique: true });
+db.tasks.createIndex({ "processInstanceId": 1 });
+db.tasks.createIndex({ "assigneeId": 1 });
+db.tasks.createIndex({ "candidateGroups": 1 });
+db.tasks.createIndex({ "status": 1 });
+db.tasks.createIndex({ "priority": 1 });
+db.tasks.createIndex({ "dueDate": 1 });
+db.tasks.createIndex({ "createdAt": 1 });
+db.tasks.createIndex({ "assigneeId": 1, "status": 1 });
+db.tasks.createIndex({ "dueDate": 1, "status": 1 });
+
+// Groups Collection Indexes
+db.groups.createIndex({ "name": 1 }, { unique: true });
+db.groups.createIndex({ "isActive": 1 });
+db.groups.createIndex({ "members": 1 });
+
+// Notifications Collection Indexes
+db.notifications.createIndex({ "userId": 1 });
+db.notifications.createIndex({ "userId": 1, "isRead": 1 });
+db.notifications.createIndex({ "createdAt": 1 });
+db.notifications.createIndex({ "type": 1 });
+
+// Analytics Collection Indexes
+db.analytics.createIndex({ "type": 1 });
+db.analytics.createIndex({ "date": 1 });
+db.analytics.createIndex({ "userId": 1 });
+db.analytics.createIndex({ "taskId": 1 });
+db.analytics.createIndex({ "processInstanceId": 1 });
+```
+
+## .NET Backend API Structure
+
+### Models/DTOs
+
+```csharp
+// Domain Models using MongoDB attributes
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+
+[BsonCollection("users")]
+public class User
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string Id { get; set; }
+    
+    [BsonElement("username")]
+    public string Username { get; set; }
+    
+    [BsonElement("email")]
+    public string Email { get; set; }
+    
+    [BsonElement("fullName")]
+    public string FullName { get; set; }
+    
+    [BsonElement("role")]
+    public UserRole Role { get; set; }
+    
+    [BsonElement("isActive")]
+    public bool IsActive { get; set; }
+    
+    [BsonElement("groups")]
+    public List<string> Groups { get; set; } = new();
+    
+    [BsonElement("preferences")]
+    public UserPreferences Preferences { get; set; } = new();
+    
+    [BsonElement("createdAt")]
+    public DateTime CreatedAt { get; set; }
+    
+    [BsonElement("updatedAt")]
+    public DateTime UpdatedAt { get; set; }
+}
+
+[BsonCollection("processDefinitions")]
+public class ProcessDefinition
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string Id { get; set; }
+    
+    [BsonElement("camundaProcessDefinitionId")]
+    public string CamundaProcessDefinitionId { get; set; }
+    
+    [BsonElement("name")]
+    public string Name { get; set; }
+    
+    [BsonElement("description")]
+    public string Description { get; set; }
+    
+    [BsonElement("version")]
+    public int Version { get; set; }
+    
+    [BsonElement("bpmnXml")]
+    public string BpmnXml { get; set; }
+    
+    [BsonElement("isActive")]
+    public bool IsActive { get; set; }
+    
+    [BsonElement("createdBy")]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string CreatedBy { get; set; }
+    
+    [BsonElement("tags")]
+    public List<string> Tags { get; set; } = new();
+    
+    [BsonElement("metadata")]
+    public ProcessMetadata Metadata { get; set; } = new();
+    
+    [BsonElement("createdAt")]
+    public DateTime CreatedAt { get; set; }
+    
+    [BsonElement("updatedAt")]
+    public DateTime UpdatedAt { get; set; }
+}
+
+[BsonCollection("processInstances")]
+public class ProcessInstance
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string Id { get; set; }
+    
+    [BsonElement("camundaProcessInstanceId")]
+    public string CamundaProcessInstanceId { get; set; }
+    
+    [BsonElement("processDefinitionId")]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string ProcessDefinitionId { get; set; }
+    
+    [BsonElement("businessKey")]
+    public string BusinessKey { get; set; }
+    
+    [BsonElement("status")]
+    public ProcessStatus Status { get; set; }
+    
+    [BsonElement("startedBy")]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string StartedBy { get; set; }
+    
+    [BsonElement("startedAt")]
+    public DateTime StartedAt { get; set; }
+    
+    [BsonElement("endedAt")]
+    public DateTime? EndedAt { get; set; }
+    
+    [BsonElement("variables")]
+    public BsonDocument Variables { get; set; } = new();
+    
+    [BsonElement("priority")]
+    public int Priority { get; set; }
+    
+    [BsonElement("dueDate")]
+    public DateTime? DueDate { get; set; }
+    
+    [BsonElement("metrics")]
+    public ProcessMetrics Metrics { get; set; } = new();
+    
+    [BsonElement("createdAt")]
+    public DateTime CreatedAt { get; set; }
+    
+    [BsonElement("updatedAt")]
+    public DateTime UpdatedAt { get; set; }
+}
+
+[BsonCollection("tasks")]
+public class TaskItem
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string Id { get; set; }
+    
+    [BsonElement("camundaTaskId")]
+    public string CamundaTaskId { get; set; }
+    
+    [BsonElement("processInstanceId")]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string ProcessInstanceId { get; set; }
+    
+    [BsonElement("name")]
+    public string Name { get; set; }
+    
+    [BsonElement("description")]
+    public string Description { get; set; }
+    
+    [BsonElement("taskDefinitionKey")]
+    public string TaskDefinitionKey { get; set; }
+    
+    [BsonElement("assigneeId")]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string AssigneeId { get; set; }
+    
+    [BsonElement("candidateGroups")]
+    public List<string> CandidateGroups { get; set; } = new();
+    
+    [BsonElement("candidateUsers")]
+    public List<string> CandidateUsers { get; set; } = new();
+    
+    [BsonElement("status")]
+    public TaskStatus Status { get; set; }
+    
+    [BsonElement("priority")]
+    public int Priority { get; set; }
+    
+    [BsonElement("dueDate")]
+    public DateTime? DueDate { get; set; }
+    
+    [BsonElement("followUpDate")]
+    public DateTime? FollowUpDate { get; set; }
+    
+    [BsonElement("createdAt")]
+    public DateTime CreatedAt { get; set; }
+    
+    [BsonElement("claimedAt")]
+    public DateTime? ClaimedAt { get; set; }
+    
+    [BsonElement("completedAt")]
+    public DateTime? CompletedAt { get; set; }
+    
+    [BsonElement("formKey")]
+    public string FormKey { get; set; }
+    
+    [BsonElement("variables")]
+    public BsonDocument Variables { get; set; } = new();
+    
+    [BsonElement("comments")]
+    public List<TaskComment> Comments { get; set; } = new();
+    
+    [BsonElement("history")]
+    public List<TaskHistoryItem> History { get; set; } = new();
+    
+    [BsonElement("attachments")]
+    public List<TaskAttachment> Attachments { get; set; } = new();
+}
+
+[BsonCollection("groups")]
+public class Group
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string Id { get; set; }
+    
+    [BsonElement("name")]
+    public string Name { get; set; }
+    
+    [BsonElement("description")]
+    public string Description { get; set; }
+    
+    [BsonElement("isActive")]
+    public bool IsActive { get; set; }
+    
+    [BsonElement("permissions")]
+    public List<string> Permissions { get; set; } = new();
+    
+    [BsonElement("members")]
+    public List<string> Members { get; set; } = new();
+    
+    [BsonElement("createdAt")]
+    public DateTime CreatedAt { get; set; }
+    
+    [BsonElement("updatedAt")]
+    public DateTime UpdatedAt { get; set; }
+}
+
+[BsonCollection("notifications")]
+public class Notification
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string Id { get; set; }
+    
+    [BsonElement("userId")]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string UserId { get; set; }
+    
+    [BsonElement("taskId")]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string TaskId { get; set; }
+    
+    [BsonElement("processInstanceId")]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string ProcessInstanceId { get; set; }
+    
+    [BsonElement("type")]
+    public string Type { get; set; }
+    
+    [BsonElement("title")]
+    public string Title { get; set; }
+    
+    [BsonElement("message")]
+    public string Message { get; set; }
+    
+    [BsonElement("isRead")]
+    public bool IsRead { get; set; }
+    
+    [BsonElement("priority")]
+    public string Priority { get; set; }
+    
+    [BsonElement("actionUrl")]
+    public string ActionUrl { get; set; }
+    
+    [BsonElement("createdAt")]
+    public DateTime CreatedAt { get; set; }
+    
+    [BsonElement("readAt")]
+    public DateTime? ReadAt { get; set; }
+}
+
+// Supporting Classes
+public class UserPreferences
+{
+    [BsonElement("timezone")]
+    public string Timezone { get; set; } = "UTC";
+    
+    [BsonElement("language")]
+    public string Language { get; set; } = "en";
+    
+    [BsonElement("notifications")]
+    public NotificationPreferences Notifications { get; set; } = new();
+}
+
+public class NotificationPreferences
+{
+    [BsonElement("email")]
+    public bool Email { get; set; } = true;
+    
+    [BsonElement("inApp")]
+    public bool InApp { get; set; } = true;
+}
+
+public class ProcessMetadata
+{
+    [BsonElement("category")]
+    public string Category { get; set; }
+    
+    [BsonElement("estimatedDuration")]
+    public int EstimatedDuration { get; set; }
+    
+    [BsonElement("complexity")]
+    public string Complexity { get; set; }
+}
+
+public class ProcessMetrics
+{
+    [BsonElement("duration")]
+    public int Duration { get; set; }
+    
+    [BsonElement("tasksCompleted")]
+    public int TasksCompleted { get; set; }
+    
+    [BsonElement("tasksTotal")]
+    public int TasksTotal { get; set; }
+}
+
+public class TaskComment
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string Id { get; set; }
+    
+    [BsonElement("userId")]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string UserId { get; set; }
+    
+    [BsonElement("comment")]
+    public string Comment { get; set; }
+    
+    [BsonElement("createdAt")]
+    public DateTime CreatedAt { get; set; }
+}
+
+public class TaskHistoryItem
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string Id { get; set; }
+    
+    [BsonElement("userId")]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string UserId { get; set; }
+    
+    [BsonElement("action")]
+    public string Action { get; set; }
+    
+    [BsonElement("details")]
+    public string Details { get; set; }
+    
+    [BsonElement("timestamp")]
+    public DateTime Timestamp { get; set; }
+}
+
+public class TaskAttachment
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string Id { get; set; }
+    
+    [BsonElement("fileName")]
+    public string FileName { get; set; }
+    
+    [BsonElement("fileSize")]
+    public long FileSize { get; set; }
+    
+    [BsonElement("contentType")]
+    public string ContentType { get; set; }
+    
+    [BsonElement("uploadedBy")]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string UploadedBy { get; set; }
+    
+    [BsonElement("uploadedAt")]
+    public DateTime UploadedAt { get; set; }
+}
+
+// DTOs
+public class TaskListDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; }
+    public string Description { get; set; }
+    public string AssigneeName { get; set; }
+    public TaskStatus Status { get; set; }
+    public int Priority { get; set; }
+    public DateTime? DueDate { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string ProcessName { get; set; }
+    public bool IsOverdue { get; set; }
+}
+
+public class TaskDetailsDto
+{
+    public Guid Id { get; set; }
+    public string CamundaTaskId { get; set; }
+    public string Name { get; set; }
+    public string Description { get; set; }
+    public UserDto Assignee { get; set; }
+    public TaskStatus Status { get; set; }
+    public int Priority { get; set; }
+    public DateTime? DueDate { get; set; }
+    public DateTime? FollowUpDate { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public ProcessInstanceDto ProcessInstance { get; set; }
+    public List<TaskCommentDto> Comments { get; set; }
+    public List<TaskHistoryDto> History { get; set; }
+    public Dictionary<string, object> Variables { get; set; }
+}
+
+// Enums
+public enum UserRole
+{
+    Admin,
+    Manager,
+    User
+}
+
+public enum ProcessStatus
+{
+    Active,
+    Completed,
+    Suspended,
+    Terminated
+}
+
+public enum TaskStatus
+{
+    Created,
+    Assigned,
+    InProgress,
+    Completed,
+    Cancelled
+}
+```
+
+### API Controllers
+
+```csharp
+[ApiController]
+[Route("api/[controller]")]
+public class TasksController : ControllerBase
+{
+    private readonly ITaskService _taskService;
+    private readonly ILogger<TasksController> _logger;
+
+    public TasksController(ITaskService taskService, ILogger<TasksController> logger)
+    {
+        _taskService = taskService;
+        _logger = logger;
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<PagedResult<TaskListDto>>> GetTasks(
+        [FromQuery] TaskFilterDto filter)
+    {
+        var result = await _taskService.GetTasksAsync(filter);
+        return Ok(result);
+    }
+
+    [HttpGet("{id}")]
+    public async Task<ActionResult<TaskDetailsDto>> GetTask(Guid id)
+    {
+        var task = await _taskService.GetTaskAsync(id);
+        if (task == null)
+            return NotFound();
+        return Ok(task);
+    }
+
+    [HttpPost("{id}/claim")]
+    public async Task<IActionResult> ClaimTask(Guid id)
+    {
+        await _taskService.ClaimTaskAsync(id, GetCurrentUserId());
+        return Ok();
+    }
+
+    [HttpPost("{id}/complete")]
+    public async Task<IActionResult> CompleteTask(Guid id, [FromBody] CompleteTaskDto dto)
+    {
+        await _taskService.CompleteTaskAsync(id, dto.Variables, GetCurrentUserId());
+        return Ok();
+    }
+
+    [HttpPost("{id}/comments")]
+    public async Task<IActionResult> AddComment(Guid id, [FromBody] AddCommentDto dto)
+    {
+        await _taskService.AddCommentAsync(id, dto.Comment, GetCurrentUserId());
+        return Ok();
+    }
+
+    private Guid GetCurrentUserId()
+    {
+        // Extract user ID from JWT token
+        return Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+    }
+}
+
+[ApiController]
+[Route("api/[controller]")]
+public class ProcessesController : ControllerBase
+{
+    private readonly IProcessService _processService;
+
+    public ProcessesController(IProcessService processService)
+    {
+        _processService = processService;
+    }
+
+    [HttpGet("definitions")]
+    public async Task<ActionResult<List<ProcessDefinitionDto>>> GetProcessDefinitions()
+    {
+        var definitions = await _processService.GetProcessDefinitionsAsync();
+        return Ok(definitions);
+    }
+
+    [HttpPost("start")]
+    public async Task<ActionResult<ProcessInstanceDto>> StartProcess([FromBody] StartProcessDto dto)
+    {
+        var instance = await _processService.StartProcessAsync(dto);
+        return Ok(instance);
+    }
+
+    [HttpGet("instances")]
+    public async Task<ActionResult<PagedResult<ProcessInstanceDto>>> GetProcessInstances(
+        [FromQuery] ProcessInstanceFilterDto filter)
+    {
+        var result = await _processService.GetProcessInstancesAsync(filter);
+        return Ok(result);
+    }
+}
+```
+
+### Services
+
+```csharp
+public interface ITaskService
+{
+    Task<PagedResult<TaskListDto>> GetTasksAsync(TaskFilterDto filter);
+    Task<TaskDetailsDto> GetTaskAsync(Guid id);
+    Task ClaimTaskAsync(Guid taskId, Guid userId);
+    Task CompleteTaskAsync(Guid taskId, Dictionary<string, object> variables, Guid userId);
+    Task AddCommentAsync(Guid taskId, string comment, Guid userId);
+}
+
+public class TaskService : ITaskService
+{
+    private readonly ITaskRepository _taskRepository;
+    private readonly ICamundaApiClient _camundaClient;
+    private readonly IMapper _mapper;
+
+    public TaskService(
+        ITaskRepository taskRepository,
+        ICamundaApiClient camundaClient,
+        IMapper mapper)
+    {
+        _taskRepository = taskRepository;
+        _camundaClient = camundaClient;
+        _mapper = mapper;
+    }
+
+    public async Task<PagedResult<TaskListDto>> GetTasksAsync(TaskFilterDto filter)
+    {
+        var tasks = await _taskRepository.GetTasksAsync(filter);
+        return _mapper.Map<PagedResult<TaskListDto>>(tasks);
+    }
+
+    public async Task ClaimTaskAsync(Guid taskId, Guid userId)
+    {
+        var task = await _taskRepository.GetByIdAsync(taskId);
+        if (task == null)
+            throw new NotFoundException("Task not found");
+
+        // Claim task in Camunda
+        await _camundaClient.ClaimTaskAsync(task.CamundaTaskId, userId.ToString());
+
+        // Update local database
+        task.AssigneeId = userId;
+        task.Status = TaskStatus.Assigned;
+        task.ClaimedAt = DateTime.UtcNow;
+        
+        await _taskRepository.UpdateAsync(task);
+    }
+
+    public async Task CompleteTaskAsync(Guid taskId, Dictionary<string, object> variables, Guid userId)
+    {
+        var task = await _taskRepository.GetByIdAsync(taskId);
+        if (task == null)
+            throw new NotFoundException("Task not found");
+
+        // Complete task in Camunda
+        await _camundaClient.CompleteTaskAsync(task.CamundaTaskId, variables);
+
+        // Update local database
+        task.Status = TaskStatus.Completed;
+        task.CompletedAt = DateTime.UtcNow;
+        task.Variables = JsonSerializer.Serialize(variables);
+        
+        await _taskRepository.UpdateAsync(task);
+    }
+}
+```
+
+## Angular Frontend Structure
+
+### Core Components
+
+```typescript
+// task-list.component.ts
+@Component({
+  selector: 'app-task-list',
+  templateUrl: './task-list.component.html',
+  styleUrls: ['./task-list.component.scss']
+})
+export class TaskListComponent implements OnInit {
+  tasks: TaskListDto[] = [];
+  loading = false;
+  filter: TaskFilter = {
+    status: null,
+    assignedToMe: false,
+    priority: null,
+    dueDate: null,
+    page: 1,
+    pageSize: 20
+  };
+  
+  displayedColumns: string[] = ['name', 'assignee', 'priority', 'dueDate', 'status', 'actions'];
+
+  constructor(
+    private taskService: TaskService,
+    private router: Router,
+    private dialog: MatDialog
+  ) {}
+
+  ngOnInit(): void {
+    this.loadTasks();
+  }
+
+  async loadTasks(): Promise<void> {
+    this.loading = true;
+    try {
+      const result = await this.taskService.getTasks(this.filter);
+      this.tasks = result.items;
+    } catch (error) {
+      console.error('Error loading tasks:', error);
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  claimTask(task: TaskListDto): void {
+    this.taskService.claimTask(task.id).subscribe({
+      next: () => {
+        this.loadTasks();
+        this.showNotification('Task claimed successfully');
+      },
+      error: (error) => {
+        console.error('Error claiming task:', error);
+        this.showNotification('Failed to claim task', 'error');
+      }
+    });
+  }
+
+  viewTask(task: TaskListDto): void {
+    this.router.navigate(['/tasks', task.id]);
+  }
+
+  openTaskDialog(task?: TaskListDto): void {
+    const dialogRef = this.dialog.open(TaskDialogComponent, {
+      width: '800px',
+      data: task || null
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.loadTasks();
+      }
+    });
+  }
+
+  private showNotification(message: string, type: 'success' | 'error' = 'success'): void {
+    // Implement notification service
+  }
+}
+
+// task-detail.component.ts
+@Component({
+  selector: 'app-task-detail',
+  templateUrl: './task-detail.component.html',
+  styleUrls: ['./task-detail.component.scss']
+})
+export class TaskDetailComponent implements OnInit {
+  task: TaskDetailsDto | null = null;
+  loading = false;
+  completing = false;
+  newComment = '';
+  
+  completionForm = this.fb.group({
+    variables: this.fb.array([])
+  });
+
+  constructor(
+    private route: ActivatedRoute,
+    private taskService: TaskService,
+    private fb: FormBuilder,
+    private router: Router
+  ) {}
+
+  ngOnInit(): void {
+    const taskId = this.route.snapshot.paramMap.get('id');
+    if (taskId) {
+      this.loadTask(taskId);
+    }
+  }
+
+  async loadTask(taskId: string): Promise<void> {
+    this.loading = true;
+    try {
+      this.task = await this.taskService.getTask(taskId);
+      this.buildCompletionForm();
+    } catch (error) {
+      console.error('Error loading task:', error);
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  completeTask(): void {
+    if (!this.task) return;
+
+    this.completing = true;
+    const variables = this.getFormVariables();
+
+    this.taskService.completeTask(this.task.id, variables).subscribe({
+      next: () => {
+        this.router.navigate(['/tasks']);
+      },
+      error: (error) => {
+        console.error('Error completing task:', error);
+        this.completing = false;
+      }
+    });
+  }
+
+  addComment(): void {
+    if (!this.task || !this.newComment.trim()) return;
+
+    this.taskService.addComment(this.task.id, this.newComment).subscribe({
+      next: () => {
+        this.newComment = '';
+        this.loadTask(this.task!.id.toString());
+      },
+      error: (error) => {
+        console.error('Error adding comment:', error);
+      }
+    });
+  }
+
+  private buildCompletionForm(): void {
+    // Build dynamic form based on task variables
+  }
+
+  private getFormVariables(): { [key: string]: any } {
+    // Extract variables from form
+    return {};
+  }
+}
+```
+
+### Services
+
+```typescript
+// task.service.ts
+@Injectable({
+  providedIn: 'root'
+})
+export class TaskService {
+  private apiUrl = 'api/tasks';
+
+  constructor(private http: HttpClient) {}
+
+  getTasks(filter: TaskFilter): Observable<PagedResult<TaskListDto>> {
+    const params = this.buildHttpParams(filter);
+    return this.http.get<PagedResult<TaskListDto>>(this.apiUrl, { params });
+  }
+
+  getTask(id: string): Observable<TaskDetailsDto> {
+    return this.http.get<TaskDetailsDto>(`${this.apiUrl}/${id}`);
+  }
+
+  claimTask(id: string): Observable<void> {
+    return this.http.post<void>(`${this.apiUrl}/${id}/claim`, {});
+  }
+
+  completeTask(id: string, variables: { [key: string]: any }): Observable<void> {
+    return this.http.post<void>(`${this.apiUrl}/${id}/complete`, { variables });
+  }
+
+  addComment(id: string, comment: string): Observable<void> {
+    return this.http.post<void>(`${this.apiUrl}/${id}/comments`, { comment });
+  }
+
+  private buildHttpParams(filter: any): HttpParams {
+    let params = new HttpParams();
+    Object.keys(filter).forEach(key => {
+      if (filter[key] !== null && filter[key] !== undefined) {
+        params = params.set(key, filter[key].toString());
+      }
+    });
+    return params;
+  }
+}
+
+// process.service.ts
+@Injectable({
+  providedIn: 'root'
+})
+export class ProcessService {
+  private apiUrl = 'api/processes';
+
+  constructor(private http: HttpClient) {}
+
+  getProcessDefinitions(): Observable<ProcessDefinitionDto[]> {
+    return this.http.get<ProcessDefinitionDto[]>(`${this.apiUrl}/definitions`);
+  }
+
+  startProcess(processKey: string, variables: { [key: string]: any }): Observable<ProcessInstanceDto> {
+    return this.http.post<ProcessInstanceDto>(`${this.apiUrl}/start`, {
+      processKey,
+      variables
+    });
+  }
+
+  getProcessInstances(filter: ProcessInstanceFilter): Observable<PagedResult<ProcessInstanceDto>> {
+    const params = this.buildHttpParams(filter);
+    return this.http.get<PagedResult<ProcessInstanceDto>>(`${this.apiUrl}/instances`, { params });
+  }
+
+  private buildHttpParams(filter: any): HttpParams {
+    let params = new HttpParams();
+    Object.keys(filter).forEach(key => {
+      if (filter[key] !== null && filter[key] !== undefined) {
+        params = params.set(key, filter[key].toString());
+      }
+    });
+    return params;
+  }
+}
+```
+
+### Models/Interfaces
+
+```typescript
+// models/task.models.ts
+export interface TaskListDto {
+  id: string;
+  name: string;
+  description: string;
+  assigneeName: string;
+  status: TaskStatus;
+  priority: number;
+  dueDate: Date | null;
+  createdAt: Date;
+  processName: string;
+  isOverdue: boolean;
+}
+
+export interface TaskDetailsDto {
+  id: string;
+  camundaTaskId: string;
+  name: string;
+  description: string;
+  assignee: UserDto;
+  status: TaskStatus;
+  priority: number;
+  dueDate: Date | null;
+  followUpDate: Date | null;
+  createdAt: Date;
+  processInstance: ProcessInstanceDto;
+  comments: TaskCommentDto[];
+  history: TaskHistoryDto[];
+  variables: { [key: string]: any };
+}
+
+export interface TaskFilter {
+  status: TaskStatus | null;
+  assignedToMe: boolean;
+  priority: number | null;
+  dueDate: Date | null;
+  page: number;
+  pageSize: number;
+}
+
+export enum TaskStatus {
+  Created = 'Created',
+  Assigned = 'Assigned',
+  InProgress = 'InProgress',
+  Completed = 'Completed',
+  Cancelled = 'Cancelled'
+}
+
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+```
+
+## Key Features
+
+### Dashboard Features
+- **Task Overview**: My tasks, overdue tasks, completed tasks
+- **Process Metrics**: Active processes, completion rates, average duration
+- **Quick Actions**: Start new process, claim urgent tasks
+- **Notifications**: Real-time updates on task assignments and due dates
+
+### Task Management Features
+- **Task List**: Filterable and sortable task list with priority indicators
+- **Task Details**: Complete task information with history and comments
+- **Task Actions**: Claim, complete, delegate, reassign tasks
+- **Bulk Operations**: Bulk claim, complete, or reassign multiple tasks
+- **Comments & History**: Full audit trail of task activities
+
+### Process Management Features
+- **Process Definitions**: View and manage available processes
+- **Process Instances**: Monitor running and completed process instances
+- **Process Diagram**: Visual representation of process flow
+- **Process Variables**: Manage and view process variables
+- **Process Analytics**: Performance metrics and bottleneck identification
+
+### User Management Features
+- **User Profiles**: Manage user information and preferences
+- **Role-Based Access**: Admin, Manager, and User roles
+- **Group Management**: Organize users into groups for task assignment
+- **Permissions**: Fine-grained access control
+
+### Reporting Features
+- **Task Reports**: Performance metrics, completion rates, overdue tasks
+- **Process Reports**: Cycle times, bottlenecks, resource utilization
+- **User Reports**: Workload distribution, productivity metrics
+- **Custom Dashboards**: Configurable widgets and KPIs
+
+## Integration Points
+
+### Camunda Integration
+- **REST API**: Full integration with Camunda REST API
+- **External Tasks**: Support for external task patterns
+- **Process Engine**: Direct integration with Camunda process engine
+- **BPMN Import**: Import and deploy BPMN diagrams
+- **History Service**: Access to historical process data
+
+### Authentication & Security
+- **JWT Authentication**: Secure API access
+- **Role-Based Authorization**: Fine-grained permissions
+- **HTTPS/TLS**: Secure communication
+- **Input Validation**: Comprehensive input sanitization
+- **Audit Logging**: Complete audit trail
+
+This design provides a comprehensive workflow and task management system that leverages Camunda's powerful process engine while providing a modern, user-friendly interface for task management and process monitoring.
