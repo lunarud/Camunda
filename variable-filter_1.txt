@@ -1,0 +1,302 @@
+// variable-filter.component.ts
+import { Component, EventEmitter, Input, Output, OnInit } from '@angular/core';
+import { FormBuilder, FormGroup, FormArray, Validators } from '@angular/forms';
+
+export interface VariableFilter {
+  name: string;
+  operator: string;
+  value: any;
+  type: string;
+}
+
+export interface FilterCriteria {
+  variables: VariableFilter[];
+  processDefinitionKey?: string;
+  assignee?: string;
+  taskDefinitionKey?: string;
+}
+
+@Component({
+  selector: 'app-variable-filter',
+  template: `
+    <div class="variable-filter-container">
+      <h3>Filter Workflows & Tasks</h3>
+      
+      <form [formGroup]="filterForm" (ngSubmit)="onSubmit()">
+        <!-- Process Definition Filter -->
+        <div class="filter-section">
+          <label>Process Definition:</label>
+          <select formControlName="processDefinitionKey" class="form-control">
+            <option value="">All Processes</option>
+            <option *ngFor="let process of availableProcesses" [value]="process.key">
+              {{process.name}}
+            </option>
+          </select>
+        </div>
+
+        <!-- Task Definition Filter -->
+        <div class="filter-section">
+          <label>Task Type:</label>
+          <select formControlName="taskDefinitionKey" class="form-control">
+            <option value="">All Tasks</option>
+            <option *ngFor="let task of availableTaskTypes" [value]="task.key">
+              {{task.name}}
+            </option>
+          </select>
+        </div>
+
+        <!-- Assignee Filter -->
+        <div class="filter-section">
+          <label>Assignee:</label>
+          <input type="text" formControlName="assignee" class="form-control" 
+                 placeholder="Enter assignee username">
+        </div>
+
+        <!-- Variable Filters -->
+        <div class="filter-section">
+          <div class="section-header">
+            <label>Variable Filters:</label>
+            <button type="button" (click)="addVariableFilter()" class="btn btn-sm btn-secondary">
+              Add Variable Filter
+            </button>
+          </div>
+          
+          <div formArrayName="variables" class="variable-filters">
+            <div *ngFor="let variable of variableControls.controls; let i = index" 
+                 [formGroupName]="i" class="variable-filter-row">
+              
+              <div class="filter-row">
+                <input type="text" formControlName="name" placeholder="Variable Name" 
+                       class="form-control variable-name">
+                
+                <select formControlName="operator" class="form-control operator">
+                  <option value="eq">Equals</option>
+                  <option value="neq">Not Equals</option>
+                  <option value="gt">Greater Than</option>
+                  <option value="gteq">Greater Than or Equal</option>
+                  <option value="lt">Less Than</option>
+                  <option value="lteq">Less Than or Equal</option>
+                  <option value="like">Contains</option>
+                </select>
+                
+                <select formControlName="type" class="form-control type" 
+                        (change)="onTypeChange(i, $event)">
+                  <option value="String">String</option>
+                  <option value="Integer">Integer</option>
+                  <option value="Double">Double</option>
+                  <option value="Boolean">Boolean</option>
+                  <option value="Date">Date</option>
+                </select>
+                
+                <input *ngIf="getVariableType(i) !== 'Boolean'" 
+                       type="text" formControlName="value" placeholder="Value" 
+                       class="form-control variable-value">
+                
+                <select *ngIf="getVariableType(i) === 'Boolean'" 
+                        formControlName="value" class="form-control variable-value">
+                  <option value="true">True</option>
+                  <option value="false">False</option>
+                </select>
+                
+                <button type="button" (click)="removeVariableFilter(i)" 
+                        class="btn btn-sm btn-danger">Remove</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+          <button type="submit" class="btn btn-primary" [disabled]="!filterForm.valid">
+            Apply Filters
+          </button>
+          <button type="button" (click)="clearFilters()" class="btn btn-secondary">
+            Clear All
+          </button>
+        </div>
+      </form>
+    </div>
+  `,
+  styles: [`
+    .variable-filter-container {
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+    
+    .filter-section {
+      margin-bottom: 15px;
+    }
+    
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    
+    .variable-filter-row {
+      margin-bottom: 10px;
+      padding: 10px;
+      border: 1px solid #eee;
+      border-radius: 4px;
+    }
+    
+    .filter-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    
+    .variable-name {
+      flex: 2;
+      min-width: 150px;
+    }
+    
+    .operator, .type {
+      flex: 1;
+      min-width: 120px;
+    }
+    
+    .variable-value {
+      flex: 2;
+      min-width: 150px;
+    }
+    
+    .form-control {
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    .btn-primary {
+      background-color: #007bff;
+      color: white;
+    }
+    
+    .btn-secondary {
+      background-color: #6c757d;
+      color: white;
+    }
+    
+    .btn-danger {
+      background-color: #dc3545;
+      color: white;
+    }
+    
+    .btn-sm {
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+    
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    
+    @media (max-width: 768px) {
+      .filter-row {
+        flex-direction: column;
+      }
+      
+      .variable-name, .operator, .type, .variable-value {
+        width: 100%;
+      }
+    }
+  `]
+})
+export class VariableFilterComponent implements OnInit {
+  @Input() availableProcesses: { key: string; name: string }[] = [];
+  @Input() availableTaskTypes: { key: string; name: string }[] = [];
+  @Output() filtersChanged = new EventEmitter<FilterCriteria>();
+
+  filterForm: FormGroup;
+
+  constructor(private fb: FormBuilder) {
+    this.filterForm = this.fb.group({
+      processDefinitionKey: [''],
+      taskDefinitionKey: [''],
+      assignee: [''],
+      variables: this.fb.array([])
+    });
+  }
+
+  ngOnInit() {
+    // Add initial variable filter
+    this.addVariableFilter();
+  }
+
+  get variableControls() {
+    return this.filterForm.get('variables') as FormArray;
+  }
+
+  addVariableFilter() {
+    const variableGroup = this.fb.group({
+      name: ['', Validators.required],
+      operator: ['eq', Validators.required],
+      value: ['', Validators.required],
+      type: ['String', Validators.required]
+    });
+
+    this.variableControls.push(variableGroup);
+  }
+
+  removeVariableFilter(index: number) {
+    this.variableControls.removeAt(index);
+  }
+
+  getVariableType(index: number): string {
+    return this.variableControls.at(index)?.get('type')?.value || 'String';
+  }
+
+  onTypeChange(index: number, event: any) {
+    const type = event.target.value;
+    const valueControl = this.variableControls.at(index)?.get('value');
+    
+    if (type === 'Boolean') {
+      valueControl?.setValue('true');
+    } else {
+      valueControl?.setValue('');
+    }
+  }
+
+  onSubmit() {
+    if (this.filterForm.valid) {
+      const formValue = this.filterForm.value;
+      
+      const criteria: FilterCriteria = {
+        variables: formValue.variables.filter((v: VariableFilter) => 
+          v.name && v.value !== null && v.value !== ''
+        ),
+        processDefinitionKey: formValue.processDefinitionKey || undefined,
+        taskDefinitionKey: formValue.taskDefinitionKey || undefined,
+        assignee: formValue.assignee || undefined
+      };
+
+      this.filtersChanged.emit(criteria);
+    }
+  }
+
+  clearFilters() {
+    this.filterForm.reset();
+    this.variableControls.clear();
+    this.addVariableFilter();
+    
+    this.filtersChanged.emit({
+      variables: [],
+      processDefinitionKey: undefined,
+      taskDefinitionKey: undefined,
+      assignee: undefined
+    });
+  }
+}
