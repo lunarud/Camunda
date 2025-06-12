@@ -1,0 +1,417 @@
+// CamundaController.java
+package com.example.camunda.controller;
+
+import com.example.camunda.dto.*;
+import com.example.camunda.service.CamundaVariableService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import javax.validation.Valid;
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/camunda")
+@CrossOrigin(origins = {"http://localhost:4200", "https://localhost:5001"})
+public class CamundaController {
+
+    private static final Logger logger = LoggerFactory.getLogger(CamundaController.class);
+
+    @Autowired
+    private CamundaVariableService camundaVariableService;
+
+    @PostMapping("/update-variables")
+    public ResponseEntity<UpdateVariablesResponse> updateVariables(
+            @Valid @RequestBody UpdateVariablesRequest request) {
+        
+        logger.info("Received request to update variables for process instance: {}", 
+                request.getProcessInstanceId());
+
+        try {
+            // Validate request
+            if (request.getProcessInstanceId() == null || request.getProcessInstanceId().trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(UpdateVariablesResponse.builder()
+                                .success(false)
+                                .message("Process Instance ID is required")
+                                .build());
+            }
+
+            if (request.getVariables() == null || request.getVariables().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(UpdateVariablesResponse.builder()
+                                .success(false)
+                                .message("At least one variable must be provided")
+                                .build());
+            }
+
+            // Update variables using Camunda service
+            List<String> updatedVariables = camundaVariableService.updateProcessVariables(
+                    request.getProcessInstanceId(),
+                    request.getTaskId(),
+                    request.getVariables()
+            );
+
+            logger.info("Successfully updated {} variables for process instance: {}", 
+                    updatedVariables.size(), request.getProcessInstanceId());
+
+            return ResponseEntity.ok(UpdateVariablesResponse.builder()
+                    .success(true)
+                    .message("Variables updated successfully")
+                    .updatedVariables(updatedVariables)
+                    .build());
+
+        } catch (ProcessInstanceNotFoundException ex) {
+            logger.error("Process instance not found: {}", request.getProcessInstanceId(), ex);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(UpdateVariablesResponse.builder()
+                            .success(false)
+                            .message("Process instance not found: " + request.getProcessInstanceId())
+                            .build());
+
+        } catch (TaskNotFoundException ex) {
+            logger.error("Task not found: {}", request.getTaskId(), ex);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(UpdateVariablesResponse.builder()
+                            .success(false)
+                            .message("Task not found: " + request.getTaskId())
+                            .build());
+
+        } catch (CamundaApiException ex) {
+            logger.error("Camunda API error while updating variables", ex);
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .body(UpdateVariablesResponse.builder()
+                            .success(false)
+                            .message("Camunda API error: " + ex.getMessage())
+                            .build());
+
+        } catch (Exception ex) {
+            logger.error("Unexpected error while updating variables for process instance: {}", 
+                    request.getProcessInstanceId(), ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(UpdateVariablesResponse.builder()
+                            .success(false)
+                            .message("An unexpected error occurred")
+                            .build());
+        }
+    }
+
+    @GetMapping("/process-instance/{processInstanceId}/variables")
+    public ResponseEntity<GetVariablesResponse> getVariables(
+            @PathVariable String processInstanceId) {
+        
+        logger.info("Retrieving variables for process instance: {}", processInstanceId);
+
+        try {
+            var variables = camundaVariableService.getProcessVariables(processInstanceId);
+
+            return ResponseEntity.ok(GetVariablesResponse.builder()
+                    .success(true)
+                    .message("Variables retrieved successfully")
+                    .variables(variables)
+                    .build());
+
+        } catch (ProcessInstanceNotFoundException ex) {
+            logger.error("Process instance not found: {}", processInstanceId, ex);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(GetVariablesResponse.builder()
+                            .success(false)
+                            .message("Process instance not found: " + processInstanceId)
+                            .build());
+
+        } catch (Exception ex) {
+            logger.error("Error retrieving variables for process instance: {}", processInstanceId, ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(GetVariablesResponse.builder()
+                            .success(false)
+                            .message("An error occurred while retrieving variables")
+                            .build());
+        }
+    }
+
+    @GetMapping("/process-instance/{processInstanceId}/tasks")
+    public ResponseEntity<GetTasksResponse> getTasks(@PathVariable String processInstanceId) {
+        logger.info("Retrieving tasks for process instance: {}", processInstanceId);
+
+        try {
+            var tasks = camundaVariableService.getProcessTasks(processInstanceId);
+
+            return ResponseEntity.ok(GetTasksResponse.builder()
+                    .success(true)
+                    .message("Tasks retrieved successfully")
+                    .tasks(tasks)
+                    .build());
+
+        } catch (Exception ex) {
+            logger.error("Error retrieving tasks for process instance: {}", processInstanceId, ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(GetTasksResponse.builder()
+                            .success(false)
+                            .message("An error occurred while retrieving tasks")
+                            .build());
+        }
+    }
+}
+
+// CamundaVariableService.java
+package com.example.camunda.service;
+
+import com.example.camunda.dto.*;
+import org.camunda.bpm.engine.RuntimeService;
+import org.camunda.bpm.engine.TaskService;
+import org.camunda.bpm.engine.runtime.ProcessInstance;
+import org.camunda.bpm.engine.task.Task;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+public class CamundaVariableService {
+
+    private static final Logger logger = LoggerFactory.getLogger(CamundaVariableService.class);
+
+    @Autowired
+    private RuntimeService runtimeService;
+
+    @Autowired
+    private TaskService taskService;
+
+    public List<String> updateProcessVariables(String processInstanceId, String taskId, 
+                                             List<CamundaVariable> variables) {
+        
+        logger.info("Updating {} variables for process instance: {}", variables.size(), processInstanceId);
+
+        // Verify process instance exists
+        ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .singleResult();
+
+        if (processInstance == null) {
+            throw new ProcessInstanceNotFoundException("Process instance not found: " + processInstanceId);
+        }
+
+        List<String> updatedVariables = new ArrayList<>();
+
+        try {
+            // Convert variables to the format expected by Camunda
+            Map<String, Object> variableMap = new HashMap<>();
+            
+            for (CamundaVariable variable : variables) {
+                Object convertedValue = convertVariableValue(variable.getValue(), variable.getType());
+                variableMap.put(variable.getName(), convertedValue);
+                updatedVariables.add(variable.getName());
+                
+                logger.debug("Adding variable: {} = {} ({})", 
+                        variable.getName(), convertedValue, variable.getType());
+            }
+
+            // Update variables based on whether taskId is provided
+            if (taskId != null && !taskId.trim().isEmpty()) {
+                // Update task variables
+                Task task = taskService.createTaskQuery()
+                        .taskId(taskId)
+                        .processInstanceId(processInstanceId)
+                        .singleResult();
+
+                if (task == null) {
+                    throw new TaskNotFoundException("Task not found: " + taskId);
+                }
+
+                taskService.setVariablesLocal(taskId, variableMap);
+                logger.info("Updated {} task variables for task: {}", variableMap.size(), taskId);
+            } else {
+                // Update process instance variables
+                runtimeService.setVariables(processInstanceId, variableMap);
+                logger.info("Updated {} process variables for process instance: {}", 
+                        variableMap.size(), processInstanceId);
+            }
+
+        } catch (Exception ex) {
+            logger.error("Error updating variables for process instance: {}", processInstanceId, ex);
+            throw new CamundaApiException("Failed to update variables: " + ex.getMessage(), ex);
+        }
+
+        return updatedVariables;
+    }
+
+    public Map<String, VariableValue> getProcessVariables(String processInstanceId) {
+        logger.info("Retrieving variables for process instance: {}", processInstanceId);
+
+        // Verify process instance exists
+        ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .singleResult();
+
+        if (processInstance == null) {
+            throw new ProcessInstanceNotFoundException("Process instance not found: " + processInstanceId);
+        }
+
+        try {
+            Map<String, Object> variables = runtimeService.getVariables(processInstanceId);
+            
+            Map<String, VariableValue> result = new HashMap<>();
+            
+            for (Map.Entry<String, Object> entry : variables.entrySet()) {
+                String variableName = entry.getKey();
+                Object value = entry.getValue();
+                String type = determineVariableType(value);
+                
+                result.put(variableName, VariableValue.builder()
+                        .value(value)
+                        .type(type)
+                        .build());
+            }
+            
+            logger.info("Retrieved {} variables for process instance: {}", result.size(), processInstanceId);
+            return result;
+
+        } catch (Exception ex) {
+            logger.error("Error retrieving variables for process instance: {}", processInstanceId, ex);
+            throw new CamundaApiException("Failed to retrieve variables: " + ex.getMessage(), ex);
+        }
+    }
+
+    public List<TaskInfo> getProcessTasks(String processInstanceId) {
+        logger.info("Retrieving tasks for process instance: {}", processInstanceId);
+
+        try {
+            List<Task> tasks = taskService.createTaskQuery()
+                    .processInstanceId(processInstanceId)
+                    .list();
+
+            return tasks.stream()
+                    .map(task -> TaskInfo.builder()
+                            .id(task.getId())
+                            .name(task.getName())
+                            .assignee(task.getAssignee())
+                            .created(task.getCreateTime())
+                            .dueDate(task.getDueDate())
+                            .priority(task.getPriority())
+                            .build())
+                    .collect(Collectors.toList());
+
+        } catch (Exception ex) {
+            logger.error("Error retrieving tasks for process instance: {}", processInstanceId, ex);
+            throw new CamundaApiException("Failed to retrieve tasks: " + ex.getMessage(), ex);
+        }
+    }
+
+    private Object convertVariableValue(Object value, String type) {
+        if (value == null) {
+            return null;
+        }
+
+        try {
+            switch (type.toUpperCase()) {
+                case "STRING":
+                    return value.toString();
+                case "INTEGER":
+                case "INT":
+                    if (value instanceof Number) {
+                        return ((Number) value).intValue();
+                    }
+                    return Integer.parseInt(value.toString());
+                case "LONG":
+                    if (value instanceof Number) {
+                        return ((Number) value).longValue();
+                    }
+                    return Long.parseLong(value.toString());
+                case "DOUBLE":
+                case "FLOAT":
+                    if (value instanceof Number) {
+                        return ((Number) value).doubleValue();
+                    }
+                    return Double.parseDouble(value.toString());
+                case "BOOLEAN":
+                    if (value instanceof Boolean) {
+                        return value;
+                    }
+                    return Boolean.parseBoolean(value.toString());
+                case "DATE":
+                    if (value instanceof Date) {
+                        return value;
+                    }
+                    // Try to parse ISO date string
+                    try {
+                        return Date.from(LocalDateTime.parse(value.toString(), 
+                                DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                                .atZone(java.time.ZoneId.systemDefault())
+                                .toInstant());
+                    } catch (Exception ex) {
+                        logger.warn("Failed to parse date: {}, using current date", value);
+                        return new Date();
+                    }
+                default:
+                    logger.warn("Unknown variable type: {}, treating as String", type);
+                    return value.toString();
+            }
+        } catch (Exception ex) {
+            logger.error("Error converting variable value: {} to type: {}", value, type, ex);
+            throw new IllegalArgumentException("Invalid variable value for type " + type + ": " + value);
+        }
+    }
+
+    private String determineVariableType(Object value) {
+        if (value == null) {
+            return "String";
+        }
+        
+        if (value instanceof String) {
+            return "String";
+        } else if (value instanceof Integer) {
+            return "Integer";
+        } else if (value instanceof Long) {
+            return "Long";
+        } else if (value instanceof Double || value instanceof Float) {
+            return "Double";
+        } else if (value instanceof Boolean) {
+            return "Boolean";
+        } else if (value instanceof Date) {
+            return "Date";
+        } else {
+            return "String";
+        }
+    }
+}
+
+// Exception classes
+package com.example.camunda.exception;
+
+public class ProcessInstanceNotFoundException extends RuntimeException {
+    public ProcessInstanceNotFoundException(String message) {
+        super(message);
+    }
+    
+    public ProcessInstanceNotFoundException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+
+public class TaskNotFoundException extends RuntimeException {
+    public TaskNotFoundException(String message) {
+        super(message);
+    }
+    
+    public TaskNotFoundException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+
+public class CamundaApiException extends RuntimeException {
+    public CamundaApiException(String message) {
+        super(message);
+    }
+    
+    public CamundaApiException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
