@@ -1,0 +1,405 @@
+// ============================================
+// 1. ANGULAR MODELS AND INTERFACES
+// ============================================
+
+// models/comment.model.ts
+export interface Comment {
+  id?: string;
+  content: string;
+  authorId: string;
+  authorName: string;
+  authorEmail?: string;
+  postId?: string;
+  parentCommentId?: string;
+  status: CommentStatus;
+  isApproved: boolean;
+  likeCount: number;
+  replyCount: number;
+  tags: string[];
+  createdAt: Date;
+  updatedAt: Date;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+export enum CommentStatus {
+  Active = 1,
+  Hidden = 2,
+  Deleted = 3,
+  Flagged = 4,
+  Pending = 5
+}
+
+// models/comment-filter.model.ts
+export interface CommentFilter {
+  searchTerm?: string;
+  authorId?: string;
+  authorName?: string;
+  postId?: string;
+  parentCommentId?: string;
+  status?: CommentStatus;
+  isApproved?: boolean;
+  createdFrom?: Date;
+  createdTo?: Date;
+  tags?: string[];
+  minLikes?: number;
+  maxLikes?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface PagedResult<T> {
+  data: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
+// ============================================
+// 2. ANGULAR SERVICE
+// ============================================
+
+// services/comment.service.ts
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Observable, BehaviorSubject } from 'rxjs';
+import { Comment, CommentFilter, PagedResult } from '../models/comment.model';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class CommentService {
+  private apiUrl = 'https://localhost:7000/api/comments';
+  private commentsSubject = new BehaviorSubject<PagedResult<Comment>>({
+    data: [],
+    totalCount: 0,
+    page: 1,
+    pageSize: 10,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPreviousPage: false
+  });
+
+  public comments$ = this.commentsSubject.asObservable();
+
+  constructor(private http: HttpClient) {}
+
+  getComments(filter: CommentFilter = {}): Observable<PagedResult<Comment>> {
+    const params = this.buildHttpParams(filter);
+    return this.http.get<PagedResult<Comment>>(this.apiUrl, { params });
+  }
+
+  getComment(id: string): Observable<Comment> {
+    return this.http.get<Comment>(`${this.apiUrl}/${id}`);
+  }
+
+  createComment(comment: Comment): Observable<Comment> {
+    return this.http.post<Comment>(this.apiUrl, comment);
+  }
+
+  updateComment(id: string, comment: Comment): Observable<void> {
+    return this.http.put<void>(`${this.apiUrl}/${id}`, comment);
+  }
+
+  deleteComment(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${id}`);
+  }
+
+  loadComments(filter: CommentFilter = {}): void {
+    this.getComments(filter).subscribe(result => {
+      this.commentsSubject.next(result);
+    });
+  }
+
+  private buildHttpParams(filter: CommentFilter): HttpParams {
+    let params = new HttpParams();
+
+    Object.keys(filter).forEach(key => {
+      const value = (filter as any)[key];
+      if (value !== null && value !== undefined && value !== '') {
+        if (Array.isArray(value)) {
+          value.forEach(item => {
+            params = params.append(key, item.toString());
+          });
+        } else if (value instanceof Date) {
+          params = params.set(key, value.toISOString());
+        } else {
+          params = params.set(key, value.toString());
+        }
+      }
+    });
+
+    return params;
+  }
+}
+
+// ============================================
+// 3. COMMENT FILTER COMPONENT
+// ============================================
+
+// components/comment-filter/comment-filter.component.ts
+import { Component, OnInit, Output, EventEmitter } from '@angular/core';
+import { FormBuilder, FormGroup } from '@angular/forms';
+import { CommentFilter, CommentStatus } from '../../models/comment.model';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
+
+@Component({
+  selector: 'app-comment-filter',
+  templateUrl: './comment-filter.component.html',
+  styleUrls: ['./comment-filter.component.css']
+})
+export class CommentFilterComponent implements OnInit {
+  @Output() filterChange = new EventEmitter<CommentFilter>();
+  
+  filterForm: FormGroup;
+  CommentStatus = CommentStatus;
+  statusOptions = [
+    { value: CommentStatus.Active, label: 'Active' },
+    { value: CommentStatus.Hidden, label: 'Hidden' },
+    { value: CommentStatus.Deleted, label: 'Deleted' },
+    { value: CommentStatus.Flagged, label: 'Flagged' },
+    { value: CommentStatus.Pending, label: 'Pending' }
+  ];
+
+  sortOptions = [
+    { value: 'createdAt', label: 'Created Date' },
+    { value: 'updatedAt', label: 'Updated Date' },
+    { value: 'authorName', label: 'Author Name' },
+    { value: 'likeCount', label: 'Like Count' },
+    { value: 'replyCount', label: 'Reply Count' }
+  ];
+
+  constructor(private fb: FormBuilder) {
+    this.filterForm = this.fb.group({
+      searchTerm: [''],
+      authorName: [''],
+      postId: [''],
+      status: [''],
+      isApproved: [''],
+      createdFrom: [''],
+      createdTo: [''],
+      tags: [''],
+      minLikes: [''],
+      maxLikes: [''],
+      sortBy: ['createdAt'],
+      sortOrder: ['desc'],
+      pageSize: [10]
+    });
+  }
+
+  ngOnInit(): void {
+    // Debounce search input
+    this.filterForm.get('searchTerm')?.valueChanges
+      .pipe(
+        debounceTime(300),
+        distinctUntilChanged()
+      )
+      .subscribe(() => this.onFilterChange());
+
+    // Subscribe to other form changes
+    this.filterForm.valueChanges
+      .pipe(
+        debounceTime(100),
+        distinctUntilChanged()
+      )
+      .subscribe(() => this.onFilterChange());
+  }
+
+  onFilterChange(): void {
+    const filter = this.getFilterFromForm();
+    this.filterChange.emit(filter);
+  }
+
+  private getFilterFromForm(): CommentFilter {
+    const formValue = this.filterForm.value;
+    const filter: CommentFilter = {
+      page: 1 // Reset to first page on filter change
+    };
+
+    if (formValue.searchTerm) filter.searchTerm = formValue.searchTerm;
+    if (formValue.authorName) filter.authorName = formValue.authorName;
+    if (formValue.postId) filter.postId = formValue.postId;
+    if (formValue.status !== '') filter.status = formValue.status;
+    if (formValue.isApproved !== '') filter.isApproved = formValue.isApproved === 'true';
+    if (formValue.createdFrom) filter.createdFrom = new Date(formValue.createdFrom);
+    if (formValue.createdTo) filter.createdTo = new Date(formValue.createdTo);
+    if (formValue.tags) filter.tags = formValue.tags.split(',').map((tag: string) => tag.trim());
+    if (formValue.minLikes) filter.minLikes = parseInt(formValue.minLikes);
+    if (formValue.maxLikes) filter.maxLikes = parseInt(formValue.maxLikes);
+    if (formValue.sortBy) filter.sortBy = formValue.sortBy;
+    if (formValue.sortOrder) filter.sortOrder = formValue.sortOrder;
+    if (formValue.pageSize) filter.pageSize = parseInt(formValue.pageSize);
+
+    return filter;
+  }
+
+  clearFilters(): void {
+    this.filterForm.reset({
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+      pageSize: 10
+    });
+  }
+}
+
+// components/comment-filter/comment-filter.component.html
+/*
+<div class="comment-filter-container">
+  <form [formGroup]="filterForm" class="filter-form">
+    
+    <!-- Search Section -->
+    <div class="filter-section">
+      <h3>Search</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="searchTerm">Search Comments</label>
+          <input 
+            type="text" 
+            id="searchTerm"
+            formControlName="searchTerm" 
+            placeholder="Search in content and author name..."
+            class="form-control">
+        </div>
+      </div>
+    </div>
+
+    <!-- Author Section -->
+    <div class="filter-section">
+      <h3>Author Filters</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="authorName">Author Name</label>
+          <input 
+            type="text" 
+            id="authorName"
+            formControlName="authorName" 
+            placeholder="Filter by author name..."
+            class="form-control">
+        </div>
+      </div>
+    </div>
+
+    <!-- Content Filters -->
+    <div class="filter-section">
+      <h3>Content Filters</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="postId">Post ID</label>
+          <input 
+            type="text" 
+            id="postId"
+            formControlName="postId" 
+            placeholder="Filter by post ID..."
+            class="form-control">
+        </div>
+        <div class="form-group">
+          <label for="tags">Tags (comma-separated)</label>
+          <input 
+            type="text" 
+            id="tags"
+            formControlName="tags" 
+            placeholder="tag1, tag2, tag3..."
+            class="form-control">
+        </div>
+      </div>
+    </div>
+
+    <!-- Status Filters -->
+    <div class="filter-section">
+      <h3>Status Filters</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="status">Comment Status</label>
+          <select id="status" formControlName="status" class="form-control">
+            <option value="">All Statuses</option>
+            <option *ngFor="let option of statusOptions" [value]="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="isApproved">Approval Status</label>
+          <select id="isApproved" formControlName="isApproved" class="form-control">
+            <option value="">All</option>
+            <option value="true">Approved</option>
+            <option value="false">Pending Approval</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Date Range -->
+    <div class="filter-section">
+      <h3>Date Range</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="createdFrom">Created From</label>
+          <input 
+            type="date" 
+            id="createdFrom"
+            formControlName="createdFrom" 
+            class="form-control">
+        </div>
+        <div class="form-group">
+          <label for="createdTo">Created To</label>
+          <input 
+            type="date" 
+            id="createdTo"
+            formControlName="createdTo" 
+            class="form-control">
+        </div>
+      </div>
+    </div>
+
+    <!-- Like Count Range -->
+    <div class="filter-section">
+      <h3>Engagement Filters</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="minLikes">Min Likes</label>
+          <input 
+            type="number" 
+            id="minLikes"
+            formControlName="minLikes" 
+            min="0"
+            class="form-control">
+        </div>
+        <div class="form-group">
+          <label for="maxLikes">Max Likes</label>
+          <input 
+            type="number" 
+            id="maxLikes"
+            formControlName="maxLikes" 
+            min="0"
+            class="form-control">
+        </div>
+      </div>
+    </div>
+
+    <!-- Sorting and Pagination -->
+    <div class="filter-section">
+      <h3>Sorting & Display</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="sortBy">Sort By</label>
+          <select id="sortBy" formControlName="sortBy" class="form-control">
+            <option *ngFor="let option of sortOptions" [value]="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="sortOrder">Sort Order</label>
+          <select id="sortOrder" formControlName="sortOrder" class="form-control">
+            <option value="desc">Descending</option>
+            <option value="asc">Ascending</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="pageSize">Items per Page</label>
+          <select id="
