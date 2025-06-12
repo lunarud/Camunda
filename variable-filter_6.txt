@@ -1,0 +1,494 @@
+// app.component.ts
+import { Component, OnInit } from '@angular/core';
+import { CamundaService, ProcessInstance, Task } from './camunda.service';
+import { FilterCriteria } from './variable-filter.component';
+
+@Component({
+  selector: 'app-root',
+  template: `
+    <div class="app-container">
+      <header>
+        <h1>Camunda Variable Filter Dashboard</h1>
+      </header>
+
+      <main>
+        <!-- Variable Filter Component -->
+        <app-variable-filter
+          [availableProcesses]="processDefinitions"
+          [availableTaskTypes]="taskDefinitions"
+          (filtersChanged)="onFiltersChanged($event)">
+        </app-variable-filter>
+
+        <!-- Loading Indicator -->
+        <div *ngIf="loading" class="loading">
+          <div class="spinner"></div>
+          <span>Loading...</span>
+        </div>
+
+        <!-- Tabs for Process Instances and Tasks -->
+        <div class="tabs-container" *ngIf="!loading">
+          <div class="tabs">
+            <button 
+              class="tab-button" 
+              [class.active]="activeTab === 'processes'"
+              (click)="setActiveTab('processes')">
+              Process Instances ({{processInstances.length}})
+            </button>
+            <button 
+              class="tab-button" 
+              [class.active]="activeTab === 'tasks'"
+              (click)="setActiveTab('tasks')">
+              Tasks ({{tasks.length}})
+            </button>
+          </div>
+
+          <!-- Process Instances Tab -->
+          <div *ngIf="activeTab === 'processes'" class="tab-content">
+            <div *ngIf="processInstances.length === 0" class="no-data">
+              No process instances found matching the current filters.
+            </div>
+            
+            <div *ngIf="processInstances.length > 0" class="data-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Process Key</th>
+                    <th>Business Key</th>
+                    <th>Start Time</th>
+                    <th>Status</th>
+                    <th>Variables</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let instance of processInstances">
+                    <td>{{instance.id}}</td>
+                    <td>{{instance.processDefinitionKey}}</td>
+                    <td>{{instance.businessKey || 'N/A'}}</td>
+                    <td>{{instance.startTime | date:'short'}}</td>
+                    <td>
+                      <span class="status" [class.completed]="instance.endTime">
+                        {{instance.endTime ? 'Completed' : 'Active'}}
+                      </span>
+                    </td>
+                    <td>
+                      <button class="btn-link" (click)="showVariables(instance.variables, 'Process Instance: ' + instance.id)">
+                        View Variables ({{getVariableCount(instance.variables)}})
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Tasks Tab -->
+          <div *ngIf="activeTab === 'tasks'" class="tab-content">
+            <div *ngIf="tasks.length === 0" class="no-data">
+              No tasks found matching the current filters.
+            </div>
+            
+            <div *ngIf="tasks.length > 0" class="data-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Process Key</th>
+                    <th>Assignee</th>
+                    <th>Created</th>
+                    <th>Due Date</th>
+                    <th>Variables</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let task of tasks">
+                    <td>{{task.id}}</td>
+                    <td>{{task.name}}</td>
+                    <td>{{task.processDefinitionKey}}</td>
+                    <td>{{task.assignee || 'Unassigned'}}</td>
+                    <td>{{task.created | date:'short'}}</td>
+                    <td>
+                      <span [class.overdue]="isOverdue(task.due)">
+                        {{task.due ? (task.due | date:'short') : 'No due date'}}
+                      </span>
+                    </td>
+                    <td>
+                      <button class="btn-link" (click)="showVariables(task.variables, 'Task: ' + task.name)">
+                        View Variables ({{getVariableCount(task.variables)}})
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Variables Modal -->
+      <div *ngIf="showVariablesModal" class="modal-overlay" (click)="closeVariablesModal()">
+        <div class="modal" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>{{variablesModalTitle}}</h3>
+            <button class="close-btn" (click)="closeVariablesModal()">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div *ngIf="!selectedVariables || getVariableKeys(selectedVariables).length === 0" class="no-variables">
+              No variables available
+            </div>
+            <div *ngIf="selectedVariables && getVariableKeys(selectedVariables).length > 0" class="variables-list">
+              <div *ngFor="let key of getVariableKeys(selectedVariables)" class="variable-item">
+                <strong>{{key}}:</strong>
+                <span class="variable-value">{{formatVariableValue(selectedVariables[key])}}</span>
+                <span class="variable-type">({{getVariableType(selectedVariables[key])}})</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .app-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    header h1 {
+      color: #333;
+      margin: 0;
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      gap: 10px;
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #007bff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .tabs-container {
+      margin-top: 20px;
+    }
+
+    .tabs {
+      display: flex;
+      border-bottom: 2px solid #ddd;
+      margin-bottom: 20px;
+    }
+
+    .tab-button {
+      padding: 12px 24px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      font-size: 16px;
+      color: #666;
+      transition: all 0.3s;
+    }
+
+    .tab-button:hover {
+      color: #007bff;
+    }
+
+    .tab-button.active {
+      color: #007bff;
+      border-bottom-color: #007bff;
+      font-weight: bold;
+    }
+
+    .tab-content {
+      min-height: 400px;
+    }
+
+    .no-data {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+      font-style: italic;
+    }
+
+    .data-table {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+
+    th {
+      background-color: #f8f9fa;
+      font-weight: bold;
+      color: #333;
+    }
+
+    tr:hover {
+      background-color: #f5f5f5;
+    }
+
+    .status {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      background-color: #28a745;
+      color: white;
+    }
+
+    .status.completed {
+      background-color: #6c757d;
+    }
+
+    .overdue {
+      color: #dc3545;
+      font-weight: bold;
+    }
+
+    .btn-link {
+      background: none;
+      border: none;
+      color: #007bff;
+      cursor: pointer;
+      text-decoration: underline;
+      font-size: 14px;
+    }
+
+    .btn-link:hover {
+      color: #0056b3;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .modal {
+      background: white;
+      border-radius: 8px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .modal-header h3 {
+      margin: 0;
+      color: #333;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #666;
+    }
+
+    .close-btn:hover {
+      color: #333;
+    }
+
+    .modal-body {
+      padding: 20px;
+    }
+
+    .no-variables {
+      text-align: center;
+      color: #666;
+      font-style: italic;
+    }
+
+    .variables-list {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .variable-item {
+      padding: 12px;
+      border: 1px solid #eee;
+      border-radius: 4px;
+      background-color: #f8f9fa;
+    }
+
+    .variable-value {
+      margin-left: 10px;
+      color: #333;
+      word-break: break-all;
+    }
+
+    .variable-type {
+      margin-left: 10px;
+      color: #666;
+      font-size: 12px;
+      font-style: italic;
+    }
+
+    @media (max-width: 768px) {
+      .app-container {
+        padding: 10px;
+      }
+
+      table {
+        font-size: 14px;
+      }
+
+      th, td {
+        padding: 8px;
+      }
+
+      .modal {
+        margin: 20px;
+        width: calc(100% - 40px);
+      }
+    }
+  `]
+})
+export class AppComponent implements OnInit {
+  processInstances: ProcessInstance[] = [];
+  tasks: Task[] = [];
+  processDefinitions: { key: string; name: string }[] = [];
+  taskDefinitions: { key: string; name: string }[] = [];
+  
+  activeTab: 'processes' | 'tasks' = 'processes';
+  loading = false;
+  
+  showVariablesModal = false;
+  selectedVariables: { [key: string]: any } | null = null;
+  variablesModalTitle = '';
+
+  constructor(private camundaService: CamundaService) {}
+
+  ngOnInit() {
+    this.loadInitialData();
+  }
+
+  loadInitialData() {
+    this.loading = true;
+    
+    // Load process definitions and task definitions
+    Promise.all([
+      this.camundaService.getProcessDefinitions().toPromise(),
+      this.camundaService.getTaskDefinitions().toPromise()
+    ]).then(([processes, taskTypes]) => {
+      this.processDefinitions = processes || [];
+      this.taskDefinitions = taskTypes || [];
+      this.loading = false;
+    }).catch(error => {
+      console.error('Error loading initial data:', error);
+      this.loading = false;
+    });
+  }
+
+  onFiltersChanged(criteria: FilterCriteria) {
+    this.loading = true;
+    
+    Promise.all([
+      this.camundaService.getProcessInstances(criteria).toPromise(),
+      this.camundaService.getTasks(criteria).toPromise()
+    ]).then(([processes, tasks]) => {
+      this.processInstances = processes || [];
+      this.tasks = tasks || [];
+      this.loading = false;
+    }).catch(error => {
+      console.error('Error applying filters:', error);
+      this.loading = false;
+    });
+  }
+
+  setActiveTab(tab: 'processes' | 'tasks') {
+    this.activeTab = tab;
+  }
+
+  showVariables(variables: { [key: string]: any } | undefined, title: string) {
+    this.selectedVariables = variables || {};
+    this.variablesModalTitle = title;
+    this.showVariablesModal = true;
+  }
+
+  closeVariablesModal() {
+    this.showVariablesModal = false;
+    this.selectedVariables = null;
+    this.variablesModalTitle = '';
+  }
+
+  getVariableCount(variables: { [key: string]: any } | undefined): number {
+    return variables ? Object.keys(variables).length : 0;
+  }
+
+  getVariableKeys(variables: { [key: string]: any }): string[] {
+    return Object.keys(variables || {});
+  }
+
+  formatVariableValue(value: any): string {
+    if (value === null || value === undefined) {
+      return 'null';
+    }
+    if (typeof value === 'object') {
+      return JSON.stringify(value, null, 2);
+    }
+    return String(value);
+  }
+
+  getVariableType(value: any): string {
+    if (value === null || value === undefined) {
+      return 'null';
+    }
+    if (Array.isArray(value)) {
+      return 'array';
+    }
+    return typeof value;
+  }
+
+  isOverdue(dueDate: string | undefined): boolean {
+    if (!dueDate) return false;
+    return new Date(dueDate) < new Date();
+  }
+}
