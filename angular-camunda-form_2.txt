@@ -1,0 +1,279 @@
+// CamundaController.cs
+using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
+using System.Net.Http.Headers;
+
+namespace CamundaIntegration.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class CamundaController : ControllerBase
+    {
+        private readonly HttpClient _httpClient;
+        private readonly ILogger<CamundaController> _logger;
+        private readonly IConfiguration _configuration;
+
+        public CamundaController(
+            HttpClient httpClient, 
+            ILogger<CamundaController> logger,
+            IConfiguration configuration)
+        {
+            _httpClient = httpClient;
+            _logger = logger;
+            _configuration = configuration;
+        }
+
+        [HttpPost("update-variables")]
+        public async Task<ActionResult<UpdateVariablesResponse>> UpdateVariables(
+            [FromBody] UpdateVariablesRequest request)
+        {
+            try
+            {
+                _logger.LogInformation("Received request to update Camunda variables for process instance: {ProcessInstanceId}", 
+                    request.ProcessInstanceId);
+
+                // Validate request
+                if (string.IsNullOrEmpty(request.ProcessInstanceId))
+                {
+                    return BadRequest(new UpdateVariablesResponse
+                    {
+                        Success = false,
+                        Message = "Process Instance ID is required"
+                    });
+                }
+
+                if (request.Variables == null || !request.Variables.Any())
+                {
+                    return BadRequest(new UpdateVariablesResponse
+                    {
+                        Success = false,
+                        Message = "At least one variable must be provided"
+                    });
+                }
+
+                // Forward request to Java application
+                var javaAppUrl = _configuration["JavaApp:BaseUrl"] ?? "http://localhost:8080";
+                var javaResponse = await ForwardToJavaApplication(javaAppUrl, request);
+
+                if (javaResponse.Success)
+                {
+                    _logger.LogInformation("Successfully updated Camunda variables for process instance: {ProcessInstanceId}", 
+                        request.ProcessInstanceId);
+                    
+                    return Ok(javaResponse);
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to update Camunda variables: {Message}", javaResponse.Message);
+                    return StatusCode(500, javaResponse);
+                }
+            }
+            catch (HttpRequestException httpEx)
+            {
+                _logger.LogError(httpEx, "HTTP error occurred while calling Java application");
+                return StatusCode(503, new UpdateVariablesResponse
+                {
+                    Success = false,
+                    Message = "Service temporarily unavailable. Please try again later."
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error occurred while updating Camunda variables");
+                return StatusCode(500, new UpdateVariablesResponse
+                {
+                    Success = false,
+                    Message = "An unexpected error occurred. Please contact support."
+                });
+            }
+        }
+
+        [HttpGet("process-instance/{processInstanceId}/variables")]
+        public async Task<ActionResult<GetVariablesResponse>> GetVariables(string processInstanceId)
+        {
+            try
+            {
+                _logger.LogInformation("Retrieving variables for process instance: {ProcessInstanceId}", processInstanceId);
+
+                var javaAppUrl = _configuration["JavaApp:BaseUrl"] ?? "http://localhost:8080";
+                var response = await _httpClient.GetAsync($"{javaAppUrl}/api/camunda/process-instance/{processInstanceId}/variables");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    var variables = JsonSerializer.Deserialize<GetVariablesResponse>(content, new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+
+                    return Ok(variables);
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning("Failed to retrieve variables: {StatusCode} - {Content}", 
+                        response.StatusCode, errorContent);
+                    
+                    return StatusCode((int)response.StatusCode, new GetVariablesResponse
+                    {
+                        Success = false,
+                        Message = $"Failed to retrieve variables: {response.ReasonPhrase}"
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving variables for process instance: {ProcessInstanceId}", processInstanceId);
+                return StatusCode(500, new GetVariablesResponse
+                {
+                    Success = false,
+                    Message = "An error occurred while retrieving variables"
+                });
+            }
+        }
+
+        private async Task<UpdateVariablesResponse> ForwardToJavaApplication(string javaAppUrl, UpdateVariablesRequest request)
+        {
+            // Prepare the request for Java application
+            var jsonContent = JsonSerializer.Serialize(request, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+
+            var httpContent = new StringContent(jsonContent, System.Text.Encoding.UTF8, "application/json");
+            
+            // Add any required headers
+            _httpClient.DefaultRequestHeaders.Accept.Clear();
+            _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            // Add authentication if required
+            var authToken = _configuration["JavaApp:AuthToken"];
+            if (!string.IsNullOrEmpty(authToken))
+            {
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", authToken);
+            }
+
+            // Call Java application
+            var response = await _httpClient.PostAsync($"{javaAppUrl}/api/camunda/update-variables", httpContent);
+            
+            var responseContent = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                return JsonSerializer.Deserialize<UpdateVariablesResponse>(responseContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                }) ?? new UpdateVariablesResponse
+                {
+                    Success = false,
+                    Message = "Invalid response from Java application"
+                };
+            }
+            else
+            {
+                _logger.LogError("Java application returned error: {StatusCode} - {Content}", 
+                    response.StatusCode, responseContent);
+                
+                // Try to parse error response
+                try
+                {
+                    var errorResponse = JsonSerializer.Deserialize<UpdateVariablesResponse>(responseContent, new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+                    
+                    return errorResponse ?? new UpdateVariablesResponse
+                    {
+                        Success = false,
+                        Message = $"Java application error: {response.ReasonPhrase}"
+                    };
+                }
+                catch (JsonException)
+                {
+                    return new UpdateVariablesResponse
+                    {
+                        Success = false,
+                        Message = $"Java application error: {response.ReasonPhrase}"
+                    };
+                }
+            }
+        }
+    }
+
+    // Data Transfer Objects
+    public class UpdateVariablesRequest
+    {
+        public string ProcessInstanceId { get; set; } = string.Empty;
+        public string? TaskId { get; set; }
+        public List<CamundaVariable> Variables { get; set; } = new();
+    }
+
+    public class CamundaVariable
+    {
+        public string Name { get; set; } = string.Empty;
+        public object? Value { get; set; }
+        public string Type { get; set; } = string.Empty;
+    }
+
+    public class UpdateVariablesResponse
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public List<string> UpdatedVariables { get; set; } = new();
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    }
+
+    public class GetVariablesResponse
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public Dictionary<string, VariableValue> Variables { get; set; } = new();
+    }
+
+    public class VariableValue
+    {
+        public object? Value { get; set; }
+        public string Type { get; set; } = string.Empty;
+    }
+}
+
+// Program.cs or Startup.cs configuration
+/*
+public void ConfigureServices(IServiceCollection services)
+{
+    services.AddControllers();
+    services.AddHttpClient();
+    
+    // Configure CORS for Angular application
+    services.AddCors(options =>
+    {
+        options.AddPolicy("AllowAngularApp",
+            builder =>
+            {
+                builder.WithOrigins("http://localhost:4200")
+                       .AllowAnyHeader()
+                       .AllowAnyMethod();
+            });
+    });
+    
+    // Add logging
+    services.AddLogging();
+}
+
+public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+{
+    if (env.IsDevelopment())
+    {
+        app.UseDeveloperExceptionPage();
+    }
+
+    app.UseRouting();
+    app.UseCors("AllowAngularApp");
+    app.UseAuthorization();
+
+    app.UseEndpoints(endpoints =>
+    {
+        endpoints.MapControllers();
+    });
+}
+*/
