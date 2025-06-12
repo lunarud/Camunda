@@ -1,0 +1,265 @@
+using Newtonsoft.Json;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace CamundaFilterApi.Services
+{
+    public interface ICamundaService
+    {
+        Task<IEnumerable<ProcessInstanceDto>> GetProcessInstancesAsync(FilterCriteriaDto criteria);
+        Task<IEnumerable<TaskDto>> GetTasksAsync(FilterCriteriaDto criteria);
+        Task<IEnumerable<ProcessDefinitionDto>> GetProcessDefinitionsAsync();
+        Task<IEnumerable<TaskDefinitionDto>> GetTaskDefinitionsAsync();
+        Task<Dictionary<string, object>> GetProcessVariablesAsync(string processInstanceId);
+        Task<Dictionary<string, object>> GetTaskVariablesAsync(string taskId);
+    }
+
+    public class CamundaService : ICamundaService
+    {
+        private readonly HttpClient _httpClient;
+        private readonly string _camundaBaseUrl;
+
+        public CamundaService(HttpClient httpClient, IConfiguration configuration)
+        {
+            _httpClient = httpClient;
+            _camundaBaseUrl = configuration.GetValue<string>("Camunda:BaseUrl") ?? "http://localhost:8080/engine-rest";
+        }
+
+        public async Task<IEnumerable<ProcessInstanceDto>> GetProcessInstancesAsync(FilterCriteriaDto criteria)
+        {
+            var requestBody = BuildProcessInstanceQuery(criteria);
+            var json = JsonConvert.SerializeObject(requestBody);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PostAsync($"{_camundaBaseUrl}/process-instance", content);
+            response.EnsureSuccessStatusCode();
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var camundaInstances = JsonConvert.DeserializeObject<List<CamundaProcessInstance>>(responseContent);
+
+            var result = new List<ProcessInstanceDto>();
+            foreach (var instance in camundaInstances)
+            {
+                var variables = await GetProcessVariablesAsync(instance.Id);
+                result.Add(new ProcessInstanceDto
+                {
+                    Id = instance.Id,
+                    ProcessDefinitionId = instance.ProcessDefinitionId,
+                    ProcessDefinitionKey = instance.ProcessDefinitionKey,
+                    BusinessKey = instance.BusinessKey,
+                    StartTime = instance.StartTime,
+                    EndTime = instance.EndTime,
+                    Variables = variables
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<IEnumerable<TaskDto>> GetTasksAsync(FilterCriteriaDto criteria)
+        {
+            var requestBody = BuildTaskQuery(criteria);
+            var json = JsonConvert.SerializeObject(requestBody);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PostAsync($"{_camundaBaseUrl}/task", content);
+            response.EnsureSuccessStatusCode();
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var camundaTasks = JsonConvert.DeserializeObject<List<CamundaTask>>(responseContent);
+
+            var result = new List<TaskDto>();
+            foreach (var task in camundaTasks)
+            {
+                var variables = await GetTaskVariablesAsync(task.Id);
+                result.Add(new TaskDto
+                {
+                    Id = task.Id,
+                    Name = task.Name,
+                    ProcessInstanceId = task.ProcessInstanceId,
+                    ProcessDefinitionKey = task.ProcessDefinitionKey,
+                    TaskDefinitionKey = task.TaskDefinitionKey,
+                    Assignee = task.Assignee,
+                    Created = task.Created,
+                    Due = task.Due,
+                    Variables = variables
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<IEnumerable<ProcessDefinitionDto>> GetProcessDefinitionsAsync()
+        {
+            var response = await _httpClient.GetAsync($"{_camundaBaseUrl}/process-definition");
+            response.EnsureSuccessStatusCode();
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var definitions = JsonConvert.DeserializeObject<List<CamundaProcessDefinition>>(responseContent);
+
+            return definitions.Select(d => new ProcessDefinitionDto
+            {
+                Key = d.Key,
+                Name = d.Name ?? d.Key
+            }).ToList();
+        }
+
+        public async Task<IEnumerable<TaskDefinitionDto>> GetTaskDefinitionsAsync()
+        {
+            // Get unique task definition keys from current tasks
+            var response = await _httpClient.GetAsync($"{_camundaBaseUrl}/task?maxResults=1000");
+            response.EnsureSuccessStatusCode();
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var tasks = JsonConvert.DeserializeObject<List<CamundaTask>>(responseContent);
+
+            return tasks
+                .Where(t => !string.IsNullOrEmpty(t.TaskDefinitionKey))
+                .GroupBy(t => t.TaskDefinitionKey)
+                .Select(g => new TaskDefinitionDto
+                {
+                    Key = g.Key,
+                    Name = g.First().Name ?? g.Key
+                })
+                .ToList();
+        }
+
+        public async Task<Dictionary<string, object>> GetProcessVariablesAsync(string processInstanceId)
+        {
+            var response = await _httpClient.GetAsync($"{_camundaBaseUrl}/process-instance/{processInstanceId}/variables");
+            
+            if (!response.IsSuccessStatusCode)
+                return new Dictionary<string, object>();
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var camundaVariables = JsonConvert.DeserializeObject<Dictionary<string, CamundaVariable>>(responseContent);
+
+            return camundaVariables?.ToDictionary(
+                kvp => kvp.Key,
+                kvp => kvp.Value.Value
+            ) ?? new Dictionary<string, object>();
+        }
+
+        public async Task<Dictionary<string, object>> GetTaskVariablesAsync(string taskId)
+        {
+            var response = await _httpClient.GetAsync($"{_camundaBaseUrl}/task/{taskId}/variables");
+            
+            if (!response.IsSuccessStatusCode)
+                return new Dictionary<string, object>();
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var camundaVariables = JsonConvert.DeserializeObject<Dictionary<string, CamundaVariable>>(responseContent);
+
+            return camundaVariables?.ToDictionary(
+                kvp => kvp.Key,
+                kvp => kvp.Value.Value
+            ) ?? new Dictionary<string, object>();
+        }
+
+        private object BuildProcessInstanceQuery(FilterCriteriaDto criteria)
+        {
+            var query = new Dictionary<string, object>();
+
+            if (!string.IsNullOrEmpty(criteria.ProcessDefinitionKey))
+            {
+                query["processDefinitionKey"] = criteria.ProcessDefinitionKey;
+            }
+
+            if (criteria.Variables?.Any() == true)
+            {
+                query["variables"] = criteria.Variables.Select(v => new
+                {
+                    name = v.Name,
+                    @operator = v.Operator,
+                    value = ConvertVariableValue(v.Value, v.Type)
+                }).ToList();
+            }
+
+            return query;
+        }
+
+        private object BuildTaskQuery(FilterCriteriaDto criteria)
+        {
+            var query = new Dictionary<string, object>();
+
+            if (!string.IsNullOrEmpty(criteria.ProcessDefinitionKey))
+            {
+                query["processDefinitionKey"] = criteria.ProcessDefinitionKey;
+            }
+
+            if (!string.IsNullOrEmpty(criteria.TaskDefinitionKey))
+            {
+                query["taskDefinitionKey"] = criteria.TaskDefinitionKey;
+            }
+
+            if (!string.IsNullOrEmpty(criteria.Assignee))
+            {
+                query["assignee"] = criteria.Assignee;
+            }
+
+            if (criteria.Variables?.Any() == true)
+            {
+                query["processVariables"] = criteria.Variables.Select(v => new
+                {
+                    name = v.Name,
+                    @operator = v.Operator,
+                    value = ConvertVariableValue(v.Value, v.Type)
+                }).ToList();
+            }
+
+            return query;
+        }
+
+        private object ConvertVariableValue(object value, string type)
+        {
+            if (value == null) return null;
+
+            return type?.ToLower() switch
+            {
+                "integer" => int.TryParse(value.ToString(), out var intVal) ? intVal : value,
+                "double" => double.TryParse(value.ToString(), out var doubleVal) ? doubleVal : value,
+                "boolean" => bool.TryParse(value.ToString(), out var boolVal) ? boolVal : value,
+                "date" => DateTime.TryParse(value.ToString(), out var dateVal) ? dateVal : value,
+                _ => value.ToString()
+            };
+        }
+    }
+
+    // Camunda API Response Models
+    public class CamundaProcessInstance
+    {
+        public string Id { get; set; }
+        public string ProcessDefinitionId { get; set; }
+        public string ProcessDefinitionKey { get; set; }
+        public string BusinessKey { get; set; }
+        public DateTime StartTime { get; set; }
+        public DateTime? EndTime { get; set; }
+    }
+
+    public class CamundaTask
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public string ProcessInstanceId { get; set; }
+        public string ProcessDefinitionKey { get; set; }
+        public string TaskDefinitionKey { get; set; }
+        public string Assignee { get; set; }
+        public DateTime Created { get; set; }
+        public DateTime? Due { get; set; }
+    }
+
+    public class CamundaProcessDefinition
+    {
+        public string Id { get; set; }
+        public string Key { get; set; }
+        public string Name { get; set; }
+    }
+
+    public class CamundaVariable
+    {
+        public object Value { get; set; }
+        public string Type { get; set; }
+    }
+}
