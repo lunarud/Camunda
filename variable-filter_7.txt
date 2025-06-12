@@ -1,0 +1,67 @@
+// Program.cs (.NET 6+)
+using CamundaFilterApi.Services;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// Add HTTP Client for Camunda REST API calls
+builder.Services.AddHttpClient<ICamundaService, CamundaService>();
+
+// Register Camunda Service
+builder.Services.AddScoped<ICamundaService, CamundaService>();
+
+// Add CORS policy for Angular frontend
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAngularApp", policy =>
+    {
+        policy.WithOrigins("http://localhost:4200") // Angular dev server
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
+// Add configuration
+builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+    app.UseDeveloperExceptionPage();
+}
+
+app.UseHttpsRedirection();
+
+// Enable CORS
+app.UseCors("AllowAngularApp");
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
+
+// appsettings.json
+/*
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "Camunda": {
+    "BaseUrl": "http://localhost:8080/engine-rest"
+  }
+}
+*/
