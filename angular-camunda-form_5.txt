@@ -1,0 +1,310 @@
+// DTO Classes for Java Spring Boot Application
+
+// UpdateVariablesRequest.java
+package com.example.camunda.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import javax.validation.Valid;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
+import java.util.List;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UpdateVariablesRequest {
+    
+    @NotBlank(message = "Process instance ID is required")
+    private String processInstanceId;
+    
+    private String taskId;
+    
+    @NotNull(message = "Variables list cannot be null")
+    @Valid
+    private List<CamundaVariable> variables;
+}
+
+// CamundaVariable.java
+package com.example.camunda.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import javax.validation.constraints.NotBlank;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class CamundaVariable {
+    
+    @NotBlank(message = "Variable name is required")
+    private String name;
+    
+    private Object value;
+    
+    @NotBlank(message = "Variable type is required")
+    private String type;
+}
+
+// UpdateVariablesResponse.java
+package com.example.camunda.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonFormat;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UpdateVariablesResponse {
+    
+    private boolean success;
+    private String message;
+    private List<String> updatedVariables;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    @Builder.Default
+    private LocalDateTime timestamp = LocalDateTime.now();
+}
+
+// GetVariablesResponse.java
+package com.example.camunda.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.Map;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class GetVariablesResponse {
+    
+    private boolean success;
+    private String message;
+    private Map<String, VariableValue> variables;
+}
+
+// VariableValue.java
+package com.example.camunda.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class VariableValue {
+    
+    private Object value;
+    private String type;
+}
+
+// GetTasksResponse.java
+package com.example.camunda.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.List;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class GetTasksResponse {
+    
+    private boolean success;
+    private String message;
+    private List<TaskInfo> tasks;
+}
+
+// TaskInfo.java
+package com.example.camunda.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonFormat;
+
+import java.util.Date;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class TaskInfo {
+    
+    private String id;
+    private String name;
+    private String assignee;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private Date created;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private Date dueDate;
+    
+    private Integer priority;
+}
+
+// Configuration class for Camunda
+// CamundaConfig.java
+package com.example.camunda.config;
+
+import org.camunda.bpm.engine.ProcessEngine;
+import org.camunda.bpm.engine.RuntimeService;
+import org.camunda.bpm.engine.TaskService;
+import org.camunda.bpm.engine.HistoryService;
+import org.camunda.bpm.engine.RepositoryService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class CamundaConfig {
+
+    @Autowired
+    private ProcessEngine processEngine;
+
+    @Bean
+    public RuntimeService runtimeService() {
+        return processEngine.getRuntimeService();
+    }
+
+    @Bean
+    public TaskService taskService() {
+        return processEngine.getTaskService();
+    }
+
+    @Bean
+    public HistoryService historyService() {
+        return processEngine.getHistoryService();
+    }
+
+    @Bean
+    public RepositoryService repositoryService() {
+        return processEngine.getRepositoryService();
+    }
+}
+
+// Global Exception Handler
+// GlobalExceptionHandler.java
+package com.example.camunda.exception;
+
+import com.example.camunda.dto.UpdateVariablesResponse;
+import com.example.camunda.dto.GetVariablesResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.context.request.WebRequest;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@ControllerAdvice
+public class GlobalExceptionHandler {
+
+    private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<UpdateVariablesResponse> handleValidationExceptions(
+            MethodArgumentNotValidException ex) {
+        
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getAllErrors().forEach((error) -> {
+            String fieldName = ((FieldError) error).getField();
+            String errorMessage = error.getDefaultMessage();
+            errors.put(fieldName, errorMessage);
+        });
+
+        String message = "Validation failed: " + errors.toString();
+        logger.error("Validation error: {}", message);
+
+        return ResponseEntity.badRequest()
+                .body(UpdateVariablesResponse.builder()
+                        .success(false)
+                        .message(message)
+                        .build());
+    }
+
+    @ExceptionHandler(ProcessInstanceNotFoundException.class)
+    public ResponseEntity<Object> handleProcessInstanceNotFound(
+            ProcessInstanceNotFoundException ex, WebRequest request) {
+        
+        logger.error("Process instance not found: {}", ex.getMessage());
+        
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(UpdateVariablesResponse.builder()
+                        .success(false)
+                        .message(ex.getMessage())
+                        .build());
+    }
+
+    @ExceptionHandler(TaskNotFoundException.class)
+    public ResponseEntity<Object> handleTaskNotFound(
+            TaskNotFoundException ex, WebRequest request) {
+        
+        logger.error("Task not found: {}", ex.getMessage());
+        
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(UpdateVariablesResponse.builder()
+                        .success(false)
+                        .message(ex.getMessage())
+                        .build());
+    }
+
+    @ExceptionHandler(CamundaApiException.class)
+    public ResponseEntity<Object> handleCamundaApiException(
+            CamundaApiException ex, WebRequest request) {
+        
+        logger.error("Camunda API exception: {}", ex.getMessage(), ex);
+        
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(UpdateVariablesResponse.builder()
+                        .success(false)
+                        .message("Camunda service error: " + ex.getMessage())
+                        .build());
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Object> handleGlobalException(
+            Exception ex, WebRequest request) {
+        
+        logger.error("Unexpected error occurred", ex);
+        
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(UpdateVariablesResponse.builder()
+                        .success(false)
+                        .message("An unexpected error occurred")
+                        .build());
+    }
+}
