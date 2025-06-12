@@ -1,0 +1,130 @@
+package com.example.camunda.controller;
+
+import com.example.camunda.service.CamundaVariableFilterService;
+import com.example.camunda.service.CamundaVariableFilterService.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/camunda")
+@CrossOrigin(origins = "http://localhost:4200") // Allow Angular app
+public class CamundaController {
+
+    @Autowired
+    private CamundaVariableFilterService camundaService;
+
+    @PostMapping("/process-instances/filter")
+    public ResponseEntity<List<ProcessInstanceDto>> getFilteredProcessInstances(
+            @RequestBody FilterCriteria criteria) {
+        try {
+            List<ProcessInstanceDto> processInstances = camundaService.getFilteredProcessInstances(criteria);
+            return ResponseEntity.ok(processInstances);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/tasks/filter")
+    public ResponseEntity<List<TaskDto>> getFilteredTasks(
+            @RequestBody FilterCriteria criteria) {
+        try {
+            List<TaskDto> tasks = camundaService.getFilteredTasks(criteria);
+            return ResponseEntity.ok(tasks);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @GetMapping("/process-definitions")
+    public ResponseEntity<List<ProcessDefinitionDto>> getProcessDefinitions() {
+        try {
+            List<ProcessDefinitionDto> definitions = camundaService.getProcessDefinitions();
+            return ResponseEntity.ok(definitions);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @GetMapping("/task-definitions")
+    public ResponseEntity<List<TaskDefinitionDto>> getTaskDefinitions() {
+        try {
+            List<TaskDefinitionDto> definitions = camundaService.getTaskDefinitions();
+            return ResponseEntity.ok(definitions);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @GetMapping("/process-instances/{processInstanceId}/variables")
+    public ResponseEntity<Map<String, Object>> getProcessVariables(
+            @PathVariable String processInstanceId) {
+        try {
+            Map<String, Object> variables = camundaService.getProcessVariables(processInstanceId);
+            return ResponseEntity.ok(variables);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @GetMapping("/tasks/{taskId}/variables")
+    public ResponseEntity<Map<String, Object>> getTaskVariables(
+            @PathVariable String taskId) {
+        try {
+            Map<String, Object> variables = camundaService.getTaskVariables(taskId);
+            return ResponseEntity.ok(variables);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    // Alternative endpoint that accepts URL parameters (like .NET version)
+    @GetMapping("/process-instances")
+    public ResponseEntity<List<ProcessInstanceDto>> getProcessInstancesWithParams(
+            @RequestParam(required = false) String processDefinitionKey,
+            @RequestParam(required = false) String variableFilters) {
+        
+        FilterCriteria criteria = new FilterCriteria();
+        criteria.setProcessDefinitionKey(processDefinitionKey);
+        
+        // Parse variable filters from JSON string if provided
+        if (variableFilters != null && !variableFilters.isEmpty()) {
+            try {
+                // You'll need to add JSON parsing logic here
+                // For now, we'll use the POST endpoint instead
+            } catch (Exception e) {
+                return ResponseEntity.badRequest().build();
+            }
+        }
+        
+        return getFilteredProcessInstances(criteria);
+    }
+
+    @GetMapping("/tasks")
+    public ResponseEntity<List<TaskDto>> getTasksWithParams(
+            @RequestParam(required = false) String processDefinitionKey,
+            @RequestParam(required = false) String taskDefinitionKey,
+            @RequestParam(required = false) String assignee,
+            @RequestParam(required = false) String variableFilters) {
+        
+        FilterCriteria criteria = new FilterCriteria();
+        criteria.setProcessDefinitionKey(processDefinitionKey);
+        criteria.setTaskDefinitionKey(taskDefinitionKey);
+        criteria.setAssignee(assignee);
+        
+        // Parse variable filters from JSON string if provided
+        if (variableFilters != null && !variableFilters.isEmpty()) {
+            try {
+                // You'll need to add JSON parsing logic here
+                // For now, we'll use the POST endpoint instead
+            } catch (Exception e) {
+                return ResponseEntity.badRequest().build();
+            }
+        }
+        
+        return getFilteredTasks(criteria);
+    }
+}
