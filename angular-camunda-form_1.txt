@@ -1,0 +1,380 @@
+// angular-camunda-form.component.ts
+import { Component, OnInit } from '@angular/core';
+import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+interface CamundaVariable {
+  name: string;
+  value: any;
+  type: string;
+}
+
+interface UpdateVariablesRequest {
+  processInstanceId: string;
+  taskId?: string;
+  variables: CamundaVariable[];
+}
+
+interface UpdateVariablesResponse {
+  success: boolean;
+  message: string;
+  updatedVariables: string[];
+}
+
+@Component({
+  selector: 'app-camunda-form',
+  template: `
+    <div class="camunda-form-container">
+      <h2>Update Camunda Process Variables</h2>
+      
+      <form [formGroup]="camundaForm" (ngSubmit)="onSubmit()">
+        <!-- Process Instance ID -->
+        <div class="form-group">
+          <label for="processInstanceId">Process Instance ID:</label>
+          <input 
+            type="text" 
+            id="processInstanceId"
+            formControlName="processInstanceId"
+            class="form-control"
+            placeholder="Enter process instance ID">
+          <div *ngIf="camundaForm.get('processInstanceId')?.invalid && camundaForm.get('processInstanceId')?.touched" class="error">
+            Process Instance ID is required
+          </div>
+        </div>
+
+        <!-- Task ID (Optional) -->
+        <div class="form-group">
+          <label for="taskId">Task ID (Optional):</label>
+          <input 
+            type="text" 
+            id="taskId"
+            formControlName="taskId"
+            class="form-control"
+            placeholder="Enter task ID if updating task variables">
+        </div>
+
+        <!-- Business Variables -->
+        <div class="variables-section">
+          <h3>Business Variables</h3>
+          
+          <div class="form-group">
+            <label for="customerName">Customer Name:</label>
+            <input 
+              type="text" 
+              id="customerName"
+              formControlName="customerName"
+              class="form-control"
+              placeholder="Enter customer name">
+          </div>
+
+          <div class="form-group">
+            <label for="orderAmount">Order Amount:</label>
+            <input 
+              type="number" 
+              id="orderAmount"
+              formControlName="orderAmount"
+              class="form-control"
+              placeholder="Enter order amount"
+              step="0.01">
+          </div>
+
+          <div class="form-group">
+            <label for="priority">Priority:</label>
+            <select id="priority" formControlName="priority" class="form-control">
+              <option value="">Select Priority</option>
+              <option value="HIGH">High</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="LOW">Low</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="approved">Approved:</label>
+            <input 
+              type="checkbox" 
+              id="approved"
+              formControlName="approved"
+              class="form-checkbox">
+          </div>
+
+          <div class="form-group">
+            <label for="processDate">Process Date:</label>
+            <input 
+              type="datetime-local" 
+              id="processDate"
+              formControlName="processDate"
+              class="form-control">
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="form-actions">
+          <button 
+            type="submit" 
+            [disabled]="camundaForm.invalid || isSubmitting"
+            class="btn btn-primary">
+            {{ isSubmitting ? 'Updating...' : 'Update Variables' }}
+          </button>
+          <button 
+            type="button" 
+            (click)="resetForm()"
+            class="btn btn-secondary">
+            Reset
+          </button>
+        </div>
+      </form>
+
+      <!-- Response Display -->
+      <div *ngIf="responseMessage" class="response-message" [ngClass]="responseClass">
+        {{ responseMessage }}
+        <div *ngIf="updatedVariables.length > 0" class="updated-vars">
+          <strong>Updated Variables:</strong> {{ updatedVariables.join(', ') }}
+        </div>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .camunda-form-container {
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-family: Arial, sans-serif;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+
+    .form-checkbox {
+      margin-left: 0;
+    }
+
+    .variables-section {
+      background-color: #f9f9f9;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 20px 0;
+    }
+
+    .form-actions {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      margin: 0 5px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .btn-primary {
+      background-color: #007bff;
+      color: white;
+    }
+
+    .btn-primary:disabled {
+      background-color: #6c757d;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background-color: #6c757d;
+      color: white;
+    }
+
+    .error {
+      color: #dc3545;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+
+    .response-message {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 4px;
+    }
+
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .error-response {
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    .updated-vars {
+      margin-top: 10px;
+      font-size: 12px;
+    }
+  `]
+})
+export class CamundaFormComponent implements OnInit {
+  camundaForm: FormGroup;
+  isSubmitting = false;
+  responseMessage = '';
+  responseClass = '';
+  updatedVariables: string[] = [];
+
+  private apiUrl = 'https://localhost:5001/api/camunda'; // .NET API endpoint
+
+  constructor(
+    private fb: FormBuilder,
+    private http: HttpClient
+  ) {
+    this.camundaForm = this.createForm();
+  }
+
+  ngOnInit(): void {
+    // Initialize form with sample data for testing
+    this.loadSampleData();
+  }
+
+  private createForm(): FormGroup {
+    return this.fb.group({
+      processInstanceId: ['', [Validators.required]],
+      taskId: [''],
+      customerName: [''],
+      orderAmount: [null, [Validators.min(0)]],
+      priority: [''],
+      approved: [false],
+      processDate: ['']
+    });
+  }
+
+  private loadSampleData(): void {
+    // Sample data for testing
+    this.camundaForm.patchValue({
+      processInstanceId: 'process-123-456',
+      taskId: 'task-789',
+      customerName: 'John Doe',
+      orderAmount: 1250.50,
+      priority: 'HIGH',
+      approved: false,
+      processDate: new Date().toISOString().slice(0, 16)
+    });
+  }
+
+  onSubmit(): void {
+    if (this.camundaForm.valid) {
+      this.isSubmitting = true;
+      this.responseMessage = '';
+      
+      const formValue = this.camundaForm.value;
+      const request = this.buildUpdateRequest(formValue);
+      
+      this.updateCamundaVariables(request).subscribe({
+        next: (response) => {
+          this.handleSuccess(response);
+        },
+        error: (error) => {
+          this.handleError(error);
+        },
+        complete: () => {
+          this.isSubmitting = false;
+        }
+      });
+    }
+  }
+
+  private buildUpdateRequest(formValue: any): UpdateVariablesRequest {
+    const variables: CamundaVariable[] = [];
+
+    // Build variables array from form values
+    if (formValue.customerName) {
+      variables.push({
+        name: 'customerName',
+        value: formValue.customerName,
+        type: 'String'
+      });
+    }
+
+    if (formValue.orderAmount !== null && formValue.orderAmount !== '') {
+      variables.push({
+        name: 'orderAmount',
+        value: formValue.orderAmount,
+        type: 'Double'
+      });
+    }
+
+    if (formValue.priority) {
+      variables.push({
+        name: 'priority',
+        value: formValue.priority,
+        type: 'String'
+      });
+    }
+
+    variables.push({
+      name: 'approved',
+      value: formValue.approved,
+      type: 'Boolean'
+    });
+
+    if (formValue.processDate) {
+      variables.push({
+        name: 'processDate',
+        value: new Date(formValue.processDate).toISOString(),
+        type: 'Date'
+      });
+    }
+
+    return {
+      processInstanceId: formValue.processInstanceId,
+      taskId: formValue.taskId || undefined,
+      variables: variables
+    };
+  }
+
+  private updateCamundaVariables(request: UpdateVariablesRequest): Observable<UpdateVariablesResponse> {
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    });
+
+    return this.http.post<UpdateVariablesResponse>(`${this.apiUrl}/update-variables`, request, { headers });
+  }
+
+  private handleSuccess(response: UpdateVariablesResponse): void {
+    this.responseMessage = response.message || 'Variables updated successfully!';
+    this.responseClass = 'success';
+    this.updatedVariables = response.updatedVariables || [];
+  }
+
+  private handleError(error: any): void {
+    console.error('Error updating Camunda variables:', error);
+    this.responseMessage = error.error?.message || 'Failed to update variables. Please try again.';
+    this.responseClass = 'error-response';
+    this.updatedVariables = [];
+  }
+
+  resetForm(): void {
+    this.camundaForm.reset();
+    this.responseMessage = '';
+    this.updatedVariables = [];
+    this.loadSampleData();
+  }
+}
