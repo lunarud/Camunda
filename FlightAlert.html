@@ -1,0 +1,427 @@
+import { Component, OnInit } from '@angular/core';
+import { ColDef, GridOptions, GridApi, ColumnApi } from 'ag-grid-community';
+
+interface FlightAlert {
+  id: string;
+  title: string;
+  dateOfAlert: string;
+  alertType: string;
+  urgency: 'Low' | 'Medium' | 'High';
+  actionRequired: string;
+  status: string;
+  departureAirport: string;
+  arrivalAirport: string;
+  flightNumber?: string;
+  scheduledDepartureTime?: string;
+  scheduledArrivalTime?: string;
+}
+
+@Component({
+  selector: 'app-flight-alert-inbox',
+  template: `
+    <div class="flight-alert-container">
+      <!-- Header -->
+      <mat-toolbar class="header-toolbar">
+        <mat-icon class="close-icon">close</mat-icon>
+        <span class="title">Flight Alert Inbox</span>
+        <span class="spacer"></span>
+        <button mat-stroked-button class="de-escalate-btn">De-Escalate</button>
+        <button mat-stroked-button class="escalate-btn">Escalate Alert</button>
+      </mat-toolbar>
+
+      <div class="main-content">
+        <!-- Left Sidebar -->
+        <div class="sidebar">
+          <div class="filters-section">
+            <div class="filter-header">
+              <mat-icon>filter_list</mat-icon>
+              <span>Filters</span>
+            </div>
+
+            <!-- Status Filters -->
+            <div class="filter-group">
+              <div class="filter-item" 
+                   [class.active]="selectedFilters.open" 
+                   (click)="toggleFilter('open')">
+                <mat-icon class="status-icon open">folder_open</mat-icon>
+                <span>Open</span>
+                <span class="count">230</span>
+              </div>
+              <div class="filter-item" 
+                   [class.active]="selectedFilters.escalated"
+                   (click)="toggleFilter('escalated')">
+                <mat-icon class="status-icon escalated">priority_high</mat-icon>
+                <span>Escalated</span>
+                <span class="count">1</span>
+              </div>
+              <div class="filter-item" 
+                   [class.active]="selectedFilters.resolved"
+                   (click)="toggleFilter('resolved')">
+                <mat-icon class="status-icon resolved">check_circle</mat-icon>
+                <span>Resolved</span>
+                <span class="count">69</span>
+              </div>
+            </div>
+
+            <!-- Urgency Filters -->
+            <div class="filter-group">
+              <div class="filter-section-title">URGENCY (3)</div>
+              <div class="urgency-bars">
+                <div class="urgency-item">
+                  <span class="urgency-label">Medium</span>
+                  <div class="urgency-bar">
+                    <div class="bar-fill medium" style="width: 80%"></div>
+                  </div>
+                  <span class="urgency-count">25</span>
+                </div>
+                <div class="urgency-item">
+                  <span class="urgency-label">High</span>
+                  <div class="urgency-bar">
+                    <div class="bar-fill high" style="width: 30%"></div>
+                  </div>
+                  <span class="urgency-count">7</span>
+                </div>
+                <div class="urgency-item">
+                  <span class="urgency-label">Low</span>
+                  <div class="urgency-bar">
+                    <div class="bar-fill low" style="width: 15%"></div>
+                  </div>
+                  <span class="urgency-count">3</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Alert Type Filters -->
+            <div class="filter-group">
+              <div class="filter-section-title">
+                ALERT TYPE (2/6)
+                <button mat-button class="clear-btn">Clear</button>
+              </div>
+              <mat-checkbox [checked]="true">Delay: Weather</mat-checkbox>
+              <span class="type-count">39</span>
+              <mat-checkbox [checked]="false">Delay: Other</span>
+              <span class="type-count">38</span>
+              <mat-checkbox [checked]="true">Delay: Mechanical Issue</mat-checkbox>
+              <span class="type-count">26</span>
+              <mat-checkbox [checked]="false">Delay: Air Traffic</mat-checkbox>
+              <span class="type-count">19</span>
+              <mat-checkbox [checked]="true">Cancellation: Mechanical I...</mat-checkbox>
+              <span class="type-count">7</span>
+              <button mat-button class="show-more-btn">Show more</button>
+            </div>
+
+            <!-- Date Filter -->
+            <div class="filter-group">
+              <div class="filter-section-title">
+                DATE OF ALERT
+                <button mat-button class="clear-btn">Clear</button>
+              </div>
+              <div class="date-histogram">
+                <!-- Date histogram bars would go here -->
+                <div class="date-range">Mon, May 18, 2020 - Fri, May 22, 2020</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="content-area">
+          <!-- Table Header Controls -->
+          <div class="table-controls">
+            <mat-button-toggle-group value="table">
+              <mat-button-toggle value="table">
+                <mat-icon>table_chart</mat-icon>
+                Table
+              </mat-button-toggle>
+            </mat-button-toggle-group>
+            <span class="spacer"></span>
+            <button mat-button>
+              <mat-icon>visibility</mat-icon>
+              Object View
+            </button>
+          </div>
+
+          <!-- AG-Grid Table -->
+          <div class="grid-container">
+            <ag-grid-angular
+              class="ag-theme-material flight-grid"
+              [rowData]="rowData"
+              [columnDefs]="columnDefs"
+              [gridOptions]="gridOptions"
+              [rowSelection]="'single'"
+              (gridReady)="onGridReady($event)"
+              (selectionChanged)="onSelectionChanged()"
+              (rowClicked)="onRowClicked($event)">
+            </ag-grid-angular>
+          </div>
+        </div>
+
+        <!-- Right Detail Panel -->
+        <div class="detail-panel" *ngIf="selectedAlert">
+          <div class="detail-header">
+            <mat-icon class="close-detail" (click)="closeDetail()">close</mat-icon>
+            <div class="detail-title">
+              <mat-icon class="alert-icon">warning</mat-icon>
+              <span>{{ selectedAlert.title }}</span>
+            </div>
+          </div>
+
+          <mat-tab-group>
+            <mat-tab label="Overview">
+              <div class="detail-content">
+                <div class="detail-section">
+                  <h3>Properties</h3>
+                  <div class="property-grid">
+                    <div class="property-item">
+                      <span class="property-label">Action Required</span>
+                      <span class="property-value">{{ selectedAlert.actionRequired }}</span>
+                    </div>
+                    <div class="property-item">
+                      <span class="property-label">Alert Type</span>
+                      <span class="property-value">{{ selectedAlert.alertType }}</span>
+                    </div>
+                    <div class="property-item">
+                      <span class="property-label">Arrival Airport Code</span>
+                      <span class="property-value">{{ selectedAlert.arrivalAirport }}</span>
+                    </div>
+                    <div class="property-item">
+                      <span class="property-label">Date Of Alert</span>
+                      <span class="property-value">{{ selectedAlert.dateOfAlert }}</span>
+                    </div>
+                    <div class="property-item">
+                      <span class="property-label">Departure Airport Code</span>
+                      <span class="property-value">{{ selectedAlert.departureAirport }}</span>
+                    </div>
+                    <div class="property-item">
+                      <span class="property-label">Scheduled Arrival Time</span>
+                      <span class="property-value">{{ selectedAlert.scheduledArrivalTime || '2020-05-22T06:27:15Z' }}</span>
+                    </div>
+                    <div class="property-item">
+                      <span class="property-label">Scheduled Departure Time</span>
+                      <span class="property-value">{{ selectedAlert.scheduledDepartureTime || '2020-05-22T04:15Z' }}</span>
+                    </div>
+                    <div class="property-item">
+                      <span class="property-label">Time Of Delay (in Hours)</span>
+                      <span class="property-value">0</span>
+                    </div>
+                    <div class="property-item">
+                      <span class="property-label">Urgency</span>
+                      <mat-chip [class]="'urgency-chip ' + selectedAlert.urgency.toLowerCase()">
+                        {{ selectedAlert.urgency }}
+                      </mat-chip>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="detail-section">
+                  <h3>Links</h3>
+                  <div class="links-section">
+                    <div class="link-item">
+                      <span class="link-label">Flight:</span>
+                      <a href="#" class="flight-link">
+                        <mat-icon>more_horiz</mat-icon>
+                        {{ selectedAlert.flightNumber || 'MCI-ATL-2012-11-27 05:00:57' }}
+                      </a>
+                    </div>
+                    <div class="link-item">
+                      <span class="link-label">Arrival Airport:</span>
+                      <a href="#" class="airport-link">
+                        <mat-icon>location_on</mat-icon>
+                        Hartsfield Jackson Atlanta International Airport
+                      </a>
+                    </div>
+                    <div class="link-item">
+                      <span class="link-label">Departure Airport:</span>
+                      <a href="#" class="airport-link">
+                        <mat-icon>location_on</mat-icon>
+                        Kansas City International Airport
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </mat-tab>
+            <mat-tab label="Properties">
+              <div class="detail-content">
+                <!-- Properties tab content -->
+              </div>
+            </mat-tab>
+            <mat-tab label="Alert Details">
+              <div class="detail-content">
+                <!-- Alert Details tab content -->
+              </div>
+            </mat-tab>
+          </mat-tab-group>
+        </div>
+      </div>
+    </div>
+  `,
+  styleUrls: ['./flight-alert-inbox.component.scss']
+})
+export class FlightAlertInboxComponent implements OnInit {
+  selectedFilters = {
+    open: true,
+    escalated: false,
+    resolved: false
+  };
+
+  selectedAlert: FlightAlert | null = null;
+  
+  gridApi!: GridApi;
+  columnApi!: ColumnApi;
+  
+  columnDefs: ColDef[] = [
+    {
+      headerName: '',
+      field: 'alertIcon',
+      width: 50,
+      cellRenderer: () => '<mat-icon class="alert-cell-icon">warning</mat-icon>',
+      sortable: false,
+      filter: false
+    },
+    {
+      headerName: 'Title',
+      field: 'title',
+      width: 200,
+      cellClass: 'title-cell'
+    },
+    {
+      headerName: 'Date of Alert',
+      field: 'dateOfAlert',
+      width: 120,
+      cellClass: 'date-cell'
+    },
+    {
+      headerName: 'Alert Type',
+      field: 'alertType',
+      width: 150
+    },
+    {
+      headerName: 'Urgency',
+      field: 'urgency',
+      width: 100,
+      cellRenderer: (params: any) => {
+        const urgency = params.value.toLowerCase();
+        return `<span class="urgency-badge ${urgency}">${params.value}</span>`;
+      }
+    },
+    {
+      headerName: 'Action Required',
+      field: 'actionRequired',
+      width: 150
+    },
+    {
+      headerName: 'Status / Action Taken',
+      field: 'status',
+      width: 150
+    },
+    {
+      headerName: 'Departure Airport Code',
+      field: 'departureAirport',
+      width: 150
+    },
+    {
+      headerName: 'Arrival Airport Code',
+      field: 'arrivalAirport',
+      width: 150
+    }
+  ];
+
+  rowData: FlightAlert[] = [
+    {
+      id: '1',
+      title: 'Delay: Mechanical Issue (LAS to LAS)',
+      dateOfAlert: 'May 22, 2020',
+      alertType: 'Delay: Mechanical',
+      urgency: 'Low',
+      actionRequired: 'Assign engineer to',
+      status: 'Unactioned',
+      departureAirport: 'LAS',
+      arrivalAirport: 'LAS'
+    },
+    {
+      id: '2',
+      title: 'Delay: Mechanical Issue (LGA to PDX)',
+      dateOfAlert: 'May 22, 2020',
+      alertType: 'Delay: Mechanical',
+      urgency: 'Medium',
+      actionRequired: 'Assign engineer to',
+      status: 'Unactioned',
+      departureAirport: 'LGA',
+      arrivalAirport: 'PDX'
+    },
+    {
+      id: '3',
+      title: 'Delay: Mechanical Issue (ORD to PIT)',
+      dateOfAlert: 'May 22, 2020',
+      alertType: 'Delay: Mechanical',
+      urgency: 'Medium',
+      actionRequired: 'Assign engineer to',
+      status: 'Unactioned',
+      departureAirport: 'ORD',
+      arrivalAirport: 'PIT'
+    },
+    {
+      id: '4',
+      title: 'Cancellation: Mechanical Issue (MCI)',
+      dateOfAlert: 'May 22, 2020',
+      alertType: 'Cancellation: Mechanical',
+      urgency: 'High',
+      actionRequired: 'Re-book passengers',
+      status: 'Unactioned',
+      departureAirport: 'MCI',
+      arrivalAirport: 'ATL'
+    },
+    {
+      id: '5',
+      title: 'Delay: Mechanical Issue (MCO to AUS)',
+      dateOfAlert: 'May 22, 2020',
+      alertType: 'Delay: Mechanical',
+      urgency: 'Medium',
+      actionRequired: 'Assign alternative',
+      status: 'Unactioned',
+      departureAirport: 'MCO',
+      arrivalAirport: 'AUS'
+    }
+    // Add more sample data as needed
+  ];
+
+  gridOptions: GridOptions = {
+    defaultColDef: {
+      resizable: true,
+      sortable: true,
+      filter: true
+    },
+    suppressRowClickSelection: false,
+    rowSelection: 'single'
+  };
+
+  ngOnInit() {
+    // Component initialization
+  }
+
+  onGridReady(event: any) {
+    this.gridApi = event.api;
+    this.columnApi = event.columnApi;
+  }
+
+  onSelectionChanged() {
+    const selectedRows = this.gridApi.getSelectedRows();
+    if (selectedRows.length > 0) {
+      this.selectedAlert = selectedRows[0];
+    }
+  }
+
+  onRowClicked(event: any) {
+    this.selectedAlert = event.data;
+  }
+
+  toggleFilter(filterName: string) {
+    (this.selectedFilters as any)[filterName] = !(this.selectedFilters as any)[filterName];
+  }
+
+  closeDetail() {
+    this.selectedAlert = null;
+    this.gridApi.deselectAll();
+  }
+}
