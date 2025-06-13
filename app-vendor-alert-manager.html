@@ -1,0 +1,285 @@
+import { Component, OnInit } from '@angular/core';
+import { ColDef, GridReadyEvent, GridApi, ColumnApi } from 'ag-grid-community';
+import { MatDialog } from '@angular/material/dialog';
+
+interface VendorData {
+  title: string;
+  vendorId: string;
+  pendingAlertsCount: number;
+  pendingCases: string;
+  oldestAlertDate: string;
+  icon?: string;
+}
+
+interface AlertData {
+  description: string;
+  alertStatus: string;
+  linkedCase: string;
+  assignedTo: string;
+  createdOn: string;
+}
+
+@Component({
+  selector: 'app-vendor-alert-manager',
+  templateUrl: './vendor-alert-manager.component.html',
+  styleUrls: ['./vendor-alert-manager.component.scss']
+})
+export class VendorAlertManagerComponent implements OnInit {
+  // Grid configurations
+  vendorGridApi!: GridApi;
+  vendorColumnApi!: ColumnApi;
+  alertGridApi!: GridApi;
+  alertColumnApi!: ColumnApi;
+
+  // Filter states
+  alertAssignedTo = '';
+  alertCreatedOnRange = 'Time range';
+  alertAfterTime = '';
+  alertBeforeTime = '';
+  alertStatus = {
+    level1New: { checked: true, count: 236 },
+    level2Investigation: { checked: false, count: 5 },
+    level2Report: { checked: false, count: 5 },
+    inCase: { checked: false, count: 2 },
+    level2Closed: { checked: false, count: 2 }
+  };
+  scenarioName = {
+    shoppingCartStringing: { checked: true, count: 253 }
+  };
+  alertId = '';
+
+  // Selected vendor
+  selectedVendor: VendorData | null = null;
+  selectedCase: any = null;
+
+  // Sample data
+  vendorRowData: VendorData[] = [
+    {
+      title: 'Amazon',
+      vendorId: '800_|_0000005571',
+      pendingAlertsCount: 1,
+      pendingCases: '2024-06-04T15:08:38.795+00:00 - Investigation Client',
+      oldestAlertDate: 'Fri, Jul 20, 2012',
+      icon: '🏪'
+    },
+    {
+      title: 'Sapsota Company Limited',
+      vendorId: '800_|_T-K515406',
+      pendingAlertsCount: 1,
+      pendingCases: 'No value',
+      oldestAlertDate: 'Mon, Feb 24, 2003',
+      icon: '🏪'
+    },
+    {
+      title: 'Sapsota Company Limited',
+      vendorId: '800_|_T-K515402',
+      pendingAlertsCount: 1,
+      pendingCases: 'No value',
+      oldestAlertDate: 'Mon, Feb 24, 2003',
+      icon: '🏪'
+    },
+    {
+      title: 'Sapsota Company Limited',
+      vendorId: '800_|_T-K515410',
+      pendingAlertsCount: 1,
+      pendingCases: 'No value',
+      oldestAlertDate: 'Mon, Feb 24, 2003',
+      icon: '🏪'
+    },
+    {
+      title: 'PA Electronics',
+      vendorId: '800_|_0000003511',
+      pendingAlertsCount: 0,
+      pendingCases: 'No value',
+      oldestAlertDate: 'No value',
+      icon: '🏪'
+    }
+  ];
+
+  alertRowData: AlertData[] = [
+    {
+      description: 'Shopping Cart Stringing',
+      alertStatus: 'Level 2 - Report approved',
+      linkedCase: '2024-06-04T15:08:38.795+00:00',
+      assignedTo: 'Lukas Braunschweig',
+      createdOn: 'Jul 20, 2012, 2:00 AM'
+    }
+  ];
+
+  // Column definitions
+  vendorColumnDefs: ColDef[] = [
+    {
+      headerName: 'Title',
+      field: 'title',
+      sortable: true,
+      filter: true,
+      flex: 2,
+      cellRenderer: (params: any) => {
+        return `<span class="vendor-icon">${params.data.icon || '🏪'}</span> ${params.value}`;
+      }
+    },
+    {
+      headerName: 'Vendor ID',
+      field: 'vendorId',
+      sortable: true,
+      filter: true,
+      flex: 2
+    },
+    {
+      headerName: 'Pending alerts count',
+      field: 'pendingAlertsCount',
+      sortable: true,
+      filter: true,
+      flex: 1,
+      cellStyle: { textAlign: 'center' }
+    },
+    {
+      headerName: 'Pending cases',
+      field: 'pendingCases',
+      sortable: true,
+      filter: true,
+      flex: 3,
+      cellRenderer: (params: any) => {
+        if (params.value === 'No value') {
+          return '<span style="color: #999; font-style: italic;">No value</span>';
+        }
+        return `<span class="case-link" style="color: #1976d2; cursor: pointer;">${params.value}</span>`;
+      }
+    },
+    {
+      headerName: 'Oldest alert date',
+      field: 'oldestAlertDate',
+      sortable: true,
+      filter: true,
+      flex: 2,
+      cellRenderer: (params: any) => {
+        if (params.value === 'No value') {
+          return '<span style="color: #999; font-style: italic;">No value</span>';
+        }
+        return params.value;
+      }
+    }
+  ];
+
+  alertColumnDefs: ColDef[] = [
+    {
+      headerName: '',
+      checkboxSelection: true,
+      headerCheckboxSelection: true,
+      width: 50
+    },
+    {
+      headerName: 'Description',
+      field: 'description',
+      sortable: true,
+      filter: true,
+      flex: 2,
+      cellRenderer: (params: any) => {
+        return `<span class="alert-icon">⚠️</span> ${params.value}`;
+      }
+    },
+    {
+      headerName: 'Alert status',
+      field: 'alertStatus',
+      sortable: true,
+      filter: true,
+      flex: 2,
+      cellRenderer: (params: any) => {
+        return `<span class="status-badge status-approved">${params.value}</span>`;
+      }
+    },
+    {
+      headerName: 'Linked case',
+      field: 'linkedCase',
+      sortable: true,
+      filter: true,
+      flex: 2,
+      cellRenderer: (params: any) => {
+        return `<span class="case-link" style="color: #1976d2; cursor: pointer;">📋 ${params.value}</span>`;
+      }
+    },
+    {
+      headerName: 'Assigned to',
+      field: 'assignedTo',
+      sortable: true,
+      filter: true,
+      flex: 2
+    },
+    {
+      headerName: 'Created on',
+      field: 'createdOn',
+      sortable: true,
+      filter: true,
+      flex: 2
+    }
+  ];
+
+  constructor(private dialog: MatDialog) {}
+
+  ngOnInit(): void {
+    this.selectedVendor = this.vendorRowData[0]; // Select Amazon by default
+  }
+
+  onVendorGridReady(params: GridReadyEvent): void {
+    this.vendorGridApi = params.api;
+    this.vendorColumnApi = params.columnApi;
+  }
+
+  onAlertGridReady(params: GridReadyEvent): void {
+    this.alertGridApi = params.api;
+    this.alertColumnApi = params.columnApi;
+  }
+
+  onVendorRowClicked(event: any): void {
+    this.selectedVendor = event.data;
+    // Update alert data based on selected vendor
+    // In real implementation, this would fetch data from service
+  }
+
+  clearFilters(): void {
+    this.alertAssignedTo = '';
+    this.alertCreatedOnRange = 'Time range';
+    this.alertAfterTime = '';
+    this.alertBeforeTime = '';
+    this.alertId = '';
+    // Reset checkboxes to default state
+    Object.keys(this.alertStatus).forEach(key => {
+      (this.alertStatus as any)[key].checked = key === 'level1New';
+    });
+  }
+
+  addFilter(): void {
+    // Implement filter addition logic
+    console.log('Add filter clicked');
+  }
+
+  createManualAlert(): void {
+    // Implement manual alert creation
+    console.log('Create manual alert clicked');
+  }
+
+  assignAlerts(): void {
+    const selectedRows = this.alertGridApi.getSelectedRows();
+    console.log('Assign alerts:', selectedRows);
+  }
+
+  closeAlertsAtLevel1(): void {
+    console.log('Close alerts at level 1');
+  }
+
+  createNewCase(): void {
+    console.log('Create new case');
+  }
+
+  addAlertsToExistingCase(): void {
+    console.log('Add alerts to existing case');
+  }
+
+  investigate(): void {
+    console.log('Investigate');
+  }
+
+  showMore(): void {
+    console.log('Show more filters');
+  }
+}
