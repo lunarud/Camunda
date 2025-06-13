@@ -1,0 +1,336 @@
+.vendor-alert-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #fafafa;
+
+  .header-tabs {
+    background: white;
+    border-bottom: 1px solid #e0e0e0;
+    
+    ::ng-deep .mat-tab-labels {
+      .mat-tab-label {
+        min-width: 120px;
+        padding: 0 16px;
+        
+        .mat-icon {
+          margin-right: 8px;
+        }
+      }
+      
+      .mat-tab-label-active {
+        background-color: #e3f2fd;
+        color: #1976d2;
+        border-bottom: 2px solid #1976d2;
+      }
+    }
+  }
+
+  .content-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .filter-sidebar {
+    width: 300px;
+    height: fit-content;
+    margin: 16px;
+    margin-right: 0;
+    
+    .mat-card-header {
+      .mat-card-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 16px;
+        font-weight: 500;
+      }
+    }
+
+    .filter-section {
+      margin-bottom: 24px;
+      
+      .filter-label {
+        display: block;
+        font-size: 12px;
+        font-weight: 500;
+        color: #666;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+      }
+      
+      .full-width {
+        width: 100%;
+      }
+      
+      .time-range {
+        .time-label {
+          display: block;
+          font-size: 12px;
+          color: #666;
+          margin: 12px 0 4px 0;
+        }
+        
+        .time-field {
+          width: 100%;
+          margin-bottom: 8px;
+        }
+      }
+      
+      .checkbox-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        
+        .mat-checkbox {
+          display: flex;
+          align-items: center;
+          
+          .count-badge {
+            margin-left: auto;
+            background-color: #e0e0e0;
+            color: #666;
+            border-radius: 12px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 500;
+            
+            &.active {
+              background-color: #1976d2;
+              color: white;
+            }
+          }
+          
+          &.level1-new ::ng-deep .mat-checkbox-frame {
+            border-color: #1976d2;
+          }
+          
+          &.level1-new.mat-checkbox-checked ::ng-deep .mat-checkbox-background {
+            background-color: #1976d2;
+          }
+        }
+      }
+      
+      .show-more-btn {
+        color: #1976d2;
+        font-size: 12px;
+        padding: 0;
+        min-width: auto;
+        height: auto;
+        line-height: 1;
+        margin-top: 8px;
+      }
+    }
+    
+    .add-filter-btn {
+      width: 100%;
+      margin-top: 16px;
+    }
+  }
+
+  .main-content {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      
+      .header-content {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        
+        h2 {
+          margin: 0;
+          font-size: 18px;
+          font-weight: 500;
+        }
+      }
+      
+      .create-alert-btn {
+        .mat-icon {
+          margin-right: 8px;
+        }
+      }
+    }
+    
+    .grid-container {
+      background: white;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 16px;
+      
+      .vendor-grid {
+        height: 300px;
+        width: 100%;
+      }
+    }
+    
+    .vendor-deep-dive {
+      background: white;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 16px;
+      
+      .deep-dive-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid #e0e0e0;
+        background-color: #f5f5f5;
+        
+        .vendor-info {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          
+          .vendor-label {
+            font-weight: 500;
+            color: #333;
+          }
+          
+          .vendor-id, .vendor-name {
+            font-size: 14px;
+            color: #666;
+          }
+        }
+      }
+      
+      .deep-dive-content {
+        padding: 0;
+        
+        ::ng-deep .mat-tab-group {
+          .mat-tab-labels {
+            background-color: #fafafa;
+            border-bottom: 1px solid #e0e0e0;
+            
+            .mat-tab-label {
+              .mat-icon {
+                margin-right: 8px;
+              }
+            }
+          }
+          
+          .mat-tab-body-wrapper {
+            .mat-tab-body {
+              .mat-tab-body-content {
+                padding: 16px;
+              }
+            }
+          }
+        }
+        
+        .alert-grid-container {
+          .alert-grid {
+            height: 200px;
+            width: 100%;
+          }
+        }
+        
+        .case-details {
+          .case-info-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 16px;
+            
+            .case-header {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              margin-bottom: 16px;
+              
+              .case-title {
+                font-weight: 500;
+                color: #1976d2;
+              }
+            }
+            
+            .case-details-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 12px;
+              
+              .case-detail {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                
+                .label {
+                  font-size: 12px;
+                  color: #666;
+                  font-weight: 500;
+                }
+                
+                .value {
+                  font-size: 14px;
+                  color: #333;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    .action-buttons {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      
+      .left-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        
+        button {
+          .mat-icon {
+            margin-right: 8px;
+          }
+        }
+      }
+      
+      .right-actions {
+        .investigate-btn {
+          .mat-icon {
+            margin-right: 8px;
+          }
+        }
+      }
+    }
+  }
+}
+
+// AG-Grid Theme Customizations
+::ng-deep .ag-theme-material {
+  .ag-header {
+    background-color: #fafafa;
+    border-bottom: 2px solid #e0e0e0;
+    
+    .ag-header-cell {
+      padding: 8px 12px;
+      
+      .ag-header-cell-text {
+        font-weight: 500;
+        color: #333;
+      }
+    }
+  }
+  
+  .ag-row {
+    border-bottom: 1px solid #f0f0f0;
+    
+    &:hover {
+      background-color: #f8f9fa;
+    }
+    
+    &.ag-row-selected {
+      background-color: #e3f2fd !important;
+    }
+  }
