@@ -1,0 +1,61 @@
+import { NgModule } from '@angular/core';
+import { BrowserModule } from '@angular/platform-browser';
+import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
+import { CommonModule } from '@angular/common';
+
+// Angular Material Imports
+import { MatToolbarModule } from '@angular/material/toolbar';
+import { MatIconModule } from '@angular/material/icon';
+import { MatButtonModule } from '@angular/material/button';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatTabsModule } from '@angular/material/tabs';
+import { MatChipsModule } from '@angular/material/chips';
+
+// AG-Grid Imports
+import { AgGridModule } from 'ag-grid-angular';
+
+// Component
+import { FlightAlertInboxComponent } from './flight-alert-inbox.component';
+
+@NgModule({
+  declarations: [
+    FlightAlertInboxComponent
+  ],
+  imports: [
+    BrowserModule,
+    BrowserAnimationsModule,
+    CommonModule,
+    
+    // Angular Material Modules
+    MatToolbarModule,
+    MatIconModule,
+    MatButtonModule,
+    MatButtonToggleModule,
+    MatCheckboxModule,
+    MatTabsModule,
+    MatChipsModule,
+    
+    // AG-Grid Module
+    AgGridModule
+  ],
+  providers: [],
+  exports: [
+    FlightAlertInboxComponent
+  ]
+})
+export class FlightAlertInboxModule { }
+
+// Package.json dependencies you'll need:
+/*
+{
+  "dependencies": {
+    "@angular/animations": "^15.0.0",
+    "@angular/cdk": "^15.0.0",
+    "@angular/common": "^15.0.0",
+    "@angular/compiler": "^15.0.0",
+    "@angular/core": "^15.0.0",
+    "@angular/material": "^15.0.0",
+    "@angular/platform-browser": "^15.0.0",
+    "@angular/platform-browser-dynamic": "^15.0.0",
+    "ag-grid-angular": "^
