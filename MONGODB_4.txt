@@ -1,0 +1,819 @@
+// ============================================
+// 1. MONGODB DATABASE INITIALIZATION SCRIPT
+// ============================================
+
+// mongodb-init.js - Run this script to set up your MongoDB database
+// Run with: mongo mongodb://localhost:27017/CommentSystemDb mongodb-init.js
+
+// Create database and collection
+use CommentSystemDb;
+
+// Create the comments collection with validation schema
+db.createCollection("comments", {
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: ["content", "authorId", "authorName", "createdAt"],
+      properties: {
+        content: {
+          bsonType: "string",
+          description: "Comment content is required and must be a string",
+          minLength: 1,
+          maxLength: 5000
+        },
+        authorId: {
+          bsonType: "string",
+          description: "Author ID is required and must be a string"
+        },
+        authorName: {
+          bsonType: "string",
+          description: "Author name is required and must be a string",
+          minLength: 1,
+          maxLength: 100
+        },
+        authorEmail: {
+          bsonType: ["string", "null"],
+          description: "Author email must be a string if provided"
+        },
+        postId: {
+          bsonType: ["string", "null"],
+          description: "Post ID must be a string if provided"
+        },
+        parentCommentId: {
+          bsonType: ["string", "null"],
+          description: "Parent comment ID must be a string if provided"
+        },
+        status: {
+          bsonType: "int",
+          minimum: 1,
+          maximum: 5,
+          description: "Status must be an integer between 1 and 5"
+        },
+        isApproved: {
+          bsonType: "bool",
+          description: "Approval status must be a boolean"
+        },
+        likeCount: 25,
+    replyCount: 2,
+    tags: ["tutorial", "positive"],
+    createdAt: new Date("2024-01-18T11:30:00Z"),
+    updatedAt: new Date("2024-01-18T11:30:00Z"),
+    ipAddress: "192.168.1.103",
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15"
+  },
+  {
+    content: "Could you add more examples for beginners?",
+    authorId: "user5",
+    authorName: "Maria Garcia",
+    authorEmail: "maria.garcia@example.com",
+    postId: "post2",
+    parentCommentId: null,
+    status: 1, // Active
+    isApproved: true,
+    likeCount: 12,
+    replyCount: 1,
+    tags: ["suggestion", "beginner"],
+    createdAt: new Date("2024-01-19T13:45:00Z"),
+    updatedAt: new Date("2024-01-19T13:45:00Z"),
+    ipAddress: "192.168.1.104",
+    userAgent: "Mozilla/5.0 (Android 11; Mobile; rv:68.0) Gecko/68.0 Firefox/88.0"
+  },
+  {
+    content: "This comment is pending approval from moderators.",
+    authorId: "user6",
+    authorName: "New User",
+    authorEmail: "newuser@example.com",
+    postId: "post3",
+    parentCommentId: null,
+    status: 5, // Pending
+    isApproved: false,
+    likeCount: 0,
+    replyCount: 0,
+    tags: ["new-user"],
+    createdAt: new Date("2024-01-20T08:20:00Z"),
+    updatedAt: new Date("2024-01-20T08:20:00Z"),
+    ipAddress: "192.168.1.105",
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0"
+  },
+  {
+    content: "Amazing work! This really helped me understand the concept better.",
+    authorId: "user7",
+    authorName: "David Wilson",
+    authorEmail: "david.wilson@example.com",
+    postId: "post3",
+    parentCommentId: null,
+    status: 1, // Active
+    isApproved: true,
+    likeCount: 18,
+    replyCount: 0,
+    tags: ["positive", "educational"],
+    createdAt: new Date("2024-01-21T15:10:00Z"),
+    updatedAt: new Date("2024-01-21T15:10:00Z"),
+    ipAddress: "192.168.1.106",
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15"
+  }
+];
+
+db.comments.insertMany(sampleComments);
+print(`Inserted ${sampleComments.length} sample comments successfully!`);
+
+// ============================================
+// 3. AGGREGATION PIPELINE EXAMPLES
+// ============================================
+
+print("\n=== Sample Aggregation Queries ===");
+
+// 1. Get comment statistics by status
+print("\n1. Comment Statistics by Status:");
+db.comments.aggregate([
+  {
+    $group: {
+      _id: "$status",
+      count: { $sum: 1 },
+      totalLikes: { $sum: "$likeCount" },
+      avgLikes: { $avg: "$likeCount" }
+    }
+  },
+  {
+    $lookup: {
+      from: "comments",
+      let: { statusId: "$_id" },
+      pipeline: [
+        { $match: { $expr: { $eq: ["$status", "$statusId"] } } },
+        { $limit: 1 },
+        { $project: { statusName: {
+          $switch: {
+            branches: [
+              { case: { $eq: ["$status", 1] }, then: "Active" },
+              { case: { $eq: ["$status", 2] }, then: "Hidden" },
+              { case: { $eq: ["$status", 3] }, then: "Deleted" },
+              { case: { $eq: ["$status", 4] }, then: "Flagged" },
+              { case: { $eq: ["$status", 5] }, then: "Pending" }
+            ],
+            default: "Unknown"
+          }
+        }}}
+      ],
+      as: "statusInfo"
+    }
+  },
+  {
+    $project: {
+      status: "$_id",
+      statusName: { $arrayElemAt: ["$statusInfo.statusName", 0] },
+      count: 1,
+      totalLikes: 1,
+      avgLikes: { $round: ["$avgLikes", 2] }
+    }
+  },
+  { $sort: { status: 1 } }
+]).pretty();
+
+// 2. Top authors by engagement
+print("\n2. Top Authors by Engagement:");
+db.comments.aggregate([
+  {
+    $group: {
+      _id: "$authorName",
+      commentCount: { $sum: 1 },
+      totalLikes: { $sum: "$likeCount" },
+      totalReplies: { $sum: "$replyCount" },
+      avgLikes: { $avg: "$likeCount" }
+    }
+  },
+  {
+    $addFields: {
+      engagementScore: { 
+        $add: [
+          "$totalLikes", 
+          { $multiply: ["$totalReplies", 2] },
+          { $multiply: ["$commentCount", 3] }
+        ]
+      }
+    }
+  },
+  { $sort: { engagementScore: -1 } },
+  { $limit: 5 }
+]).pretty();
+
+// 3. Comments per day trend
+print("\n3. Comments per Day Trend:");
+db.comments.aggregate([
+  {
+    $group: {
+      _id: {
+        $dateToString: { 
+          format: "%Y-%m-%d", 
+          date: "$createdAt" 
+        }
+      },
+      commentCount: { $sum: 1 },
+      approvedCount: { 
+        $sum: { $cond: ["$isApproved", 1, 0] } 
+      },
+      totalLikes: { $sum: "$likeCount" }
+    }
+  },
+  { $sort: { "_id": 1 } }
+]).pretty();
+
+print("\nDatabase initialization completed successfully!");
+
+// ============================================
+// 4. MONGODB MAINTENANCE UTILITIES
+// ============================================
+
+// maintenance-utils.js - Utility functions for database maintenance
+
+// Function to clean up deleted comments older than 30 days
+function cleanupOldDeletedComments() {
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  
+  const result = db.comments.deleteMany({
+    status: 3, // Deleted status
+    updatedAt: { $lt: thirtyDaysAgo }
+  });
+  
+  print(`Cleaned up ${result.deletedCount} old deleted comments.`);
+  return result;
+}
+
+// Function to update reply counts for parent comments
+function updateReplyCounts() {
+  const pipeline = [
+    {
+      $match: { parentCommentId: { $ne: null } }
+    },
+    {
+      $group: {
+        _id: "$parentCommentId",
+        replyCount: { $sum: 1 }
+      }
+    }
+  ];
+  
+  const replyCounts = db.comments.aggregate(pipeline).toArray();
+  let updateCount = 0;
+  
+  replyCounts.forEach(item => {
+    const result = db.comments.updateOne(
+      { _id: ObjectId(item._id) },
+      { 
+        $set: { replyCount: item.replyCount },
+        $currentDate: { updatedAt: true }
+      }
+    );
+    if (result.modifiedCount > 0) updateCount++;
+  });
+  
+  print(`Updated reply counts for ${updateCount} comments.`);
+  return updateCount;
+}
+
+// Function to get database statistics
+function getDatabaseStats() {
+  const stats = {
+    totalComments: db.comments.countDocuments(),
+    approvedComments: db.comments.countDocuments({ isApproved: true }),
+    pendingApproval: db.comments.countDocuments({ isApproved: false }),
+    statusBreakdown: {},
+    avgLikesPerComment: 0,
+    topTags: []
+  };
+  
+  // Status breakdown
+  const statusCounts = db.comments.aggregate([
+    { $group: { _id: "$status", count: { $sum: 1 } } }
+  ]).toArray();
+  
+  statusCounts.forEach(item => {
+    const statusName = getStatusName(item._id);
+    stats.statusBreakdown[statusName] = item.count;
+  });
+  
+  // Average likes
+  const avgLikes = db.comments.aggregate([
+    { $group: { _id: null, avgLikes: { $avg: "$likeCount" } } }
+  ]).toArray();
+  
+  if (avgLikes.length > 0) {
+    stats.avgLikesPerComment = Math.round(avgLikes[0].avgLikes * 100) / 100;
+  }
+  
+  // Top tags
+  stats.topTags = db.comments.aggregate([
+    { $unwind: "$tags" },
+    { $group: { _id: "$tags", count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: 10 }
+  ]).toArray();
+  
+  return stats;
+}
+
+function getStatusName(statusId) {
+  const statusMap = {
+    1: "Active",
+    2: "Hidden", 
+    3: "Deleted",
+    4: "Flagged",
+    5: "Pending"
+  };
+  return statusMap[statusId] || "Unknown";
+}
+
+// Function to rebuild text search index
+function rebuildTextIndex() {
+  try {
+    db.comments.dropIndex("idx_text_search");
+    print("Dropped existing text search index.");
+  } catch (e) {
+    print("No existing text search index found.");
+  }
+  
+  db.comments.createIndex(
+    { 
+      "content": "text", 
+      "authorName": "text" 
+    },
+    { 
+      name: "idx_text_search",
+      background: true,
+      weights: {
+        "content": 10,
+        "authorName": 5
+      }
+    }
+  );
+  
+  print("Text search index rebuilt successfully.");
+}
+
+// ============================================
+// 5. PERFORMANCE MONITORING QUERIES
+// ============================================
+
+// Function to analyze query performance
+function analyzeQueryPerformance() {
+  print("=== Query Performance Analysis ===");
+  
+  // Enable profiling for slow operations (>100ms)
+  db.setProfilingLevel(1, { slowms: 100 });
+  
+  print("Profiling enabled for operations slower than 100ms.");
+  print("Run your application for a while, then check db.system.profile for slow queries.");
+  
+  // Sample queries to test performance
+  print("\nTesting common query patterns...");
+  
+  // Test 1: Text search
+  const start1 = new Date();
+  db.comments.find({ $text: { $search: "great article" } }).limit(10).toArray();
+  const end1 = new Date();
+  print(`Text search query: ${end1 - start1}ms`);
+  
+  // Test 2: Date range query
+  const start2 = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  db.comments.find({ 
+    createdAt: { $gte: yesterday },
+    status: 1,
+    isApproved: true 
+  }).sort({ createdAt: -1 }).limit(20).toArray();
+  const end2 = new Date();
+  print(`Date range query: ${end2 - start2}ms`);
+  
+  // Test 3: Author-based query
+  const start3 = new Date();
+  db.comments.find({ authorName: /john/i }).sort({ createdAt: -1 }).limit(10).toArray();
+  const end3 = new Date();
+  print(`Author search query: ${end3 - start3}ms`);
+  
+  // Show index usage statistics
+  print("\n=== Index Usage Statistics ===");
+  db.comments.aggregate([
+    { $indexStats: {} }
+  ]).forEach(stat => {
+    print(`Index: ${stat.name}`);
+    print(`  Accesses: ${stat.accesses.ops}`);
+    print(`  Since: ${stat.accesses.since}`);
+    print("");
+  });
+}
+
+// Export utility functions for use in scripts
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    cleanupOldDeletedComments,
+    updateReplyCounts,
+    getDatabaseStats,
+    rebuildTextIndex,
+    analyzeQueryPerformance
+  };
+}
+
+// ============================================
+// 6. DATA VALIDATION AND MIGRATION SCRIPT
+// ============================================
+
+// Function to validate existing data integrity
+function validateDataIntegrity() {
+  print("=== Data Integrity Validation ===");
+  
+  let issues = [];
+  
+  // Check for missing required fields
+  const missingContent = db.comments.countDocuments({ 
+    $or: [
+      { content: { $exists: false } },
+      { content: "" },
+      { content: null }
+    ]
+  });
+  if (missingContent > 0) {
+    issues.push(`${missingContent} comments missing content`);
+  }
+  
+  // Check for invalid status values
+  const invalidStatus = db.comments.countDocuments({
+    status: { $not: { $in: [1, 2, 3, 4, 5] } }
+  });
+  if (invalidStatus > 0) {
+    issues.push(`${invalidStatus} comments with invalid status`);
+  }
+  
+  // Check for negative like counts
+  const negativeLikes = db.comments.countDocuments({
+    likeCount: { $lt: 0 }
+  });
+  if (negativeLikes > 0) {
+    issues.push(`${negativeLikes} comments with negative like counts`);
+  }
+  
+  // Check for orphaned replies
+  const orphanedReplies = db.comments.aggregate([
+    { $match: { parentCommentId: { $ne: null } } },
+    {
+      $lookup: {
+        from: "comments",
+        localField: "parentCommentId",
+        foreignField: "_id",
+        as: "parent"
+      }
+    },
+    { $match: { parent: { $size: 0 } } },
+    { $count: "count" }
+  ]).toArray();
+  
+  if (orphanedReplies.length > 0) {
+    issues.push(`${orphanedReplies[0].count} orphaned reply comments`);
+  }
+  
+  if (issues.length === 0) {
+    print("✅ Data integrity validation passed - no issues found!");
+  } else {
+    print("❌ Data integrity issues found:");
+    issues.forEach(issue => print(`  - ${issue}`));
+  }
+  
+  return issues;
+}
+
+// Function to fix common data issues
+function fixDataIssues() {
+  print("=== Fixing Data Issues ===");
+  
+  let fixed = 0;
+  
+  // Fix negative like counts
+  const result1 = db.comments.updateMany(
+    { likeCount: { $lt: 0 } },
+    { $set: { likeCount: 0 } }
+  );
+  fixed += result1.modifiedCount;
+  print(`Fixed ${result1.modifiedCount} negative like counts`);
+  
+  // Fix missing updatedAt fields
+  const result2 = db.comments.updateMany(
+    { updatedAt: { $exists: false } },
+    { $set: { updatedAt: new Date() } }
+  );
+  fixed += result2.modifiedCount;
+  print(`Fixed ${result2.modifiedCount} missing updatedAt fields`);
+  
+  // Fix empty tags arrays
+  const result3 = db.comments.updateMany(
+    { tags: { $exists: false } },
+    { $set: { tags: [] } }
+  );
+  fixed += result3.modifiedCount;
+  print(`Fixed ${result3.modifiedCount} missing tags arrays`);
+  
+  print(`✅ Fixed ${fixed} total data issues`);
+  return fixed;
+}
+
+print("\n=== MongoDB Comment System Setup Complete ===");
+print("Available utility functions:");
+print("- cleanupOldDeletedComments()");
+print("- updateReplyCounts()");
+print("- getDatabaseStats()");
+print("- rebuildTextIndex()");
+print("- analyzeQueryPerformance()");
+print("- validateDataIntegrity()");
+print("- fixDataIssues()");
+print("\nRun these functions as needed for maintenance.");
+
+// ============================================
+// 7. ENVIRONMENT CONFIGURATION
+// ============================================
+
+/*
+# .env file for .NET application
+MONGODB_CONNECTION_STRING=mongodb://localhost:27017
+MONGODB_DATABASE_NAME=CommentSystemDb
+ASPNETCORE_ENVIRONMENT=Development
+CORS_ALLOWED_ORIGINS=http://localhost:4200,https://localhost:4200
+
+# Production settings
+# MONGODB_CONNECTION_STRING=mongodb+srv://username:password@cluster.mongodb.net
+# MONGODB_DATABASE_NAME=CommentSystemDb_Prod
+# ASPNETCORE_ENVIRONMENT=Production
+*/
+
+/*
+# Angular environment.ts
+export const environment = {
+  production: false,
+  apiUrl: 'https://localhost:7000/api',
+  enableLogging: true
+};
+
+# Angular environment.prod.ts  
+export const environment = {
+  production: true,
+  apiUrl: 'https://your-api-domain.com/api',
+  enableLogging: false
+};
+*/
+
+/*
+# Docker Compose for development
+version: '3.8'
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: comment-system-mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: CommentSystemDb
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongodb-init.js:/docker-entrypoint-initdb.d/mongodb-init.js:ro
+  
+  api:
+    build: ./CommentSystem.API
+    container_name: comment-system-api
+    restart: always
+    ports:
+      - "7000:80"
+    environment:
+      - MONGODB_CONNECTION_STRING=mongodb://mongodb:27017
+      - MONGODB_DATABASE_NAME=CommentSystemDb
+    depends_on:
+      - mongodb
+  
+  frontend:
+    build: ./comment-system-frontend
+    container_name: comment-system-frontend
+    restart: always
+    ports:
+      - "4200:80"
+    depends_on:
+      - api
+
+volumes:
+  mongodb_data:
+*/ {
+          bsonType: "int",
+          minimum: 0,
+          description: "Like count must be a non-negative integer"
+        },
+        replyCount: {
+          bsonType: "int",
+          minimum: 0,
+          description: "Reply count must be a non-negative integer"
+        },
+        tags: {
+          bsonType: "array",
+          items: {
+            bsonType: "string"
+          },
+          description: "Tags must be an array of strings"
+        },
+        createdAt: {
+          bsonType: "date",
+          description: "Created date is required and must be a date"
+        },
+        updatedAt: {
+          bsonType: "date",
+          description: "Updated date must be a date"
+        }
+      }
+    }
+  }
+});
+
+// Create optimized indexes for filtering and sorting
+print("Creating indexes...");
+
+// Compound index for common queries
+db.comments.createIndex(
+  { 
+    "postId": 1, 
+    "status": 1, 
+    "isApproved": 1, 
+    "createdAt": -1 
+  },
+  { 
+    name: "idx_post_status_approved_created",
+    background: true 
+  }
+);
+
+// Author-based queries
+db.comments.createIndex(
+  { 
+    "authorId": 1, 
+    "createdAt": -1 
+  },
+  { 
+    name: "idx_author_created",
+    background: true 
+  }
+);
+
+// Text search index for content and author name
+db.comments.createIndex(
+  { 
+    "content": "text", 
+    "authorName": "text" 
+  },
+  { 
+    name: "idx_text_search",
+    background: true,
+    weights: {
+      "content": 10,
+      "authorName": 5
+    }
+  }
+);
+
+// Date range queries
+db.comments.createIndex(
+  { 
+    "createdAt": 1 
+  },
+  { 
+    name: "idx_created_date",
+    background: true 
+  }
+);
+
+// Tags array index
+db.comments.createIndex(
+  { 
+    "tags": 1 
+  },
+  { 
+    name: "idx_tags",
+    background: true 
+  }
+);
+
+// Like count for sorting
+db.comments.createIndex(
+  { 
+    "likeCount": -1 
+  },
+  { 
+    name: "idx_like_count",
+    background: true 
+  }
+);
+
+// Parent-child relationship
+db.comments.createIndex(
+  { 
+    "parentCommentId": 1 
+  },
+  { 
+    name: "idx_parent_comment",
+    background: true 
+  }
+);
+
+// Sparse index for email (only index documents that have email)
+db.comments.createIndex(
+  { 
+    "authorEmail": 1 
+  },
+  { 
+    name: "idx_author_email",
+    background: true,
+    sparse: true 
+  }
+);
+
+print("Indexes created successfully!");
+
+// ============================================
+// 2. SAMPLE DATA INSERTION SCRIPT
+// ============================================
+
+// Insert sample data for testing
+print("Inserting sample data...");
+
+const sampleComments = [
+  {
+    content: "This is a great article! Thanks for sharing such valuable insights.",
+    authorId: "user1",
+    authorName: "John Doe",
+    authorEmail: "john.doe@example.com",
+    postId: "post1",
+    parentCommentId: null,
+    status: 1, // Active
+    isApproved: true,
+    likeCount: 15,
+    replyCount: 3,
+    tags: ["positive", "helpful"],
+    createdAt: new Date("2024-01-15T10:30:00Z"),
+    updatedAt: new Date("2024-01-15T10:30:00Z"),
+    ipAddress: "192.168.1.100",
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+  },
+  {
+    content: "I disagree with some points made here. Could you provide more sources?",
+    authorId: "user2",
+    authorName: "Jane Smith",
+    authorEmail: "jane.smith@example.com",
+    postId: "post1",
+    parentCommentId: null,
+    status: 1, // Active
+    isApproved: true,
+    likeCount: 8,
+    replyCount: 1,
+    tags: ["question", "critical"],
+    createdAt: new Date("2024-01-16T14:20:00Z"),
+    updatedAt: new Date("2024-01-16T14:20:00Z"),
+    ipAddress: "192.168.1.101",
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+  },
+  {
+    content: "Great question Jane! Here are some additional resources...",
+    authorId: "user1",
+    authorName: "John Doe",
+    authorEmail: "john.doe@example.com",
+    postId: "post1",
+    parentCommentId: null, // This would be set to Jane's comment ID in real scenario
+    status: 1, // Active
+    isApproved: true,
+    likeCount: 5,
+    replyCount: 0,
+    tags: ["reply", "helpful"],
+    createdAt: new Date("2024-01-16T16:45:00Z"),
+    updatedAt: new Date("2024-01-16T16:45:00Z"),
+    ipAddress: "192.168.1.100",
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+  },
+  {
+    content: "This comment contains inappropriate content and should be reviewed.",
+    authorId: "user3",
+    authorName: "Spam User",
+    authorEmail: "spam@example.com",
+    postId: "post1",
+    parentCommentId: null,
+    status: 4, // Flagged
+    isApproved: false,
+    likeCount: 0,
+    replyCount: 0,
+    tags: ["spam", "inappropriate"],
+    createdAt: new Date("2024-01-17T09:15:00Z"),
+    updatedAt: new Date("2024-01-17T09:15:00Z"),
+    ipAddress: "192.168.1.102",
+    userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
+  },
+  {
+    content: "Excellent tutorial! Step-by-step instructions were very clear.",
+    authorId: "user4",
+    authorName: "Alex Johnson",
+    authorEmail: "alex.johnson@example.com",
+    postId: "post2",
+    parentCommentId: null,
+    status: 1, // Active
+    isApproved: true,
+    likeCount:
