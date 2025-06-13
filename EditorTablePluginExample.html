@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor.js Table Plugin Example</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        #editorjs {
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            min-height: 400px;
+            padding: 20px;
+            background: #fff;
+        }
+        
+        .toolbar {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        button:hover {
+            background: #3367d6;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        #output {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .instructions {
+            background: #e8f4fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4285f4;
+        }
+        
+        .instructions h3 {
+            margin-top: 0;
+            color: #1a73e8;
+        }
+        
+        .instructions ul {
+            margin-bottom: 0;
+        }
+        
+        /* Custom table styles for better appearance */
+        .ce-table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 10px 0;
+        }
+        
+        .ce-table__cell {
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            min-width: 100px;
+            position: relative;
+        }
+        
+        .ce-table__cell:focus {
+            outline: 2px solid #4285f4;
+            outline-offset: -2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Editor.js Table Plugin Example</h1>
+        
+        <div class="instructions">
+            <h3>How to use:</h3>
+            <ul>
+                <li>Click the <strong>+</strong> button in the editor to add blocks</li>
+                <li>Select <strong>Table</strong> from the toolbar</li>
+                <li>Click in cells to edit content</li>
+                <li>Right-click on table for context menu options</li>
+                <li>Use the buttons below to interact with the editor</li>
+            </ul>
+        </div>
+        
+        <div id="editorjs"></div>
+        
+        <div class="toolbar">
+            <button onclick="saveData()">💾 Save Data</button>
+            <button onclick="loadSampleData()">📝 Load Sample Table</button>
+            <button onclick="clearEditor()">🗑️ Clear Editor</button>
+            <button onclick="toggleReadOnly()">🔒 Toggle Read-Only</button>
+        </div>
+        
+        <div id="output"></div>
+    </div>
+
+    <!-- Load Editor.js and Table plugin from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/editorjs__editorjs/2.28.2/editor.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/editorjs__table/2.2.2/table.min.js"></script>
+
+    <script>
+        let editor;
+        let isReadOnly = false;
+
+        // Initialize Editor.js with Table plugin
+        function initEditor() {
+            editor = new EditorJS({
+                holder: 'editorjs',
+                placeholder: 'Click here to start writing or use the + button to add a table...',
+                tools: {
+                    table: {
+                        class: Table,
+                        inlineToolbar: true,
+                        config: {
+                            rows: 3,
+                            cols: 3,
+                            withHeadings: true
+                        }
+                    }
+                },
+                data: {
+                    blocks: [
+                        {
+                            type: "paragraph",
+                            data: {
+                                text: "Welcome to Editor.js with Table support! Click the + button below to add a table."
+                            }
+                        }
+                    ]
+                },
+                onChange: function(api, event) {
+                    console.log('Editor content changed', event);
+                }
+            });
+        }
+
+        // Save editor data
+        async function saveData() {
+            try {
+                const outputData = await editor.save();
+                document.getElementById('output').textContent = JSON.stringify(outputData, null, 2);
+                console.log('Article data: ', outputData);
+            } catch (error) {
+                console.error('Saving failed: ', error);
+                alert('Failed to save data: ' + error.message);
+            }
+        }
+
+        // Load sample data with a table
+        async function loadSampleData() {
+            const sampleData = {
+                blocks: [
+                    {
+                        type: "paragraph",
+                        data: {
+                            text: "Here's a sample table showing quarterly sales data:"
+                        }
+                    },
+                    {
+                        type: "table",
+                        data: {
+                            withHeadings: true,
+                            content: [
+                                ["Quarter", "Revenue", "Growth", "Region"],
+                                ["Q1 2024", "$125,000", "12%", "North America"],
+                                ["Q2 2024", "$140,000", "15%", "Europe"],
+                                ["Q3 2024", "$158,000", "18%", "Asia Pacific"],
+                                ["Q4 2024", "$172,000", "22%", "Global"]
+                            ]
+                        }
+                    },
+                    {
+                        type: "paragraph",
+                        data: {
+                            text: "You can edit any cell by clicking on it. Right-click for more options like adding/removing rows and columns."
+                        }
+                    }
+                ]
+            };
+
+            try {
+                await editor.render(sampleData);
+                console.log('Sample data loaded');
+            } catch (error) {
+                console.error('Loading sample data failed: ', error);
+                alert('Failed to load sample data: ' + error.message);
+            }
+        }
+
+        // Clear editor content
+        async function clearEditor() {
+            if (confirm('Are you sure you want to clear all content?')) {
+                try {
+                    await editor.clear();
+                    console.log('Editor cleared');
+                } catch (error) {
+                    console.error('Clearing failed: ', error);
+                }
+            }
+        }
+
+        // Toggle read-only mode
+        async function toggleReadOnly() {
+            try {
+                if (isReadOnly) {
+                    await editor.readOnly.toggle(false);
+                    isReadOnly = false;
+                    document.querySelector('button[onclick="toggleReadOnly()"]').textContent = '🔒 Toggle Read-Only';
+                } else {
+                    await editor.readOnly.toggle(true);
+                    isReadOnly = true;
+                    document.querySelector('button[onclick="toggleReadOnly()"]').textContent = '✏️ Enable Editing';
+                }
+            } catch (error) {
+                console.error('Toggle read-only failed: ', error);
+            }
+        }
+
+        // Initialize editor when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initEditor();
+        });
+
+        // Handle editor destruction on page unload
+        window.addEventListener('beforeunload', function() {
+            if (editor && editor.destroy) {
+                editor.destroy();
+            }
+        });
+    </script>
+</body>
+</html>
