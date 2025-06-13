@@ -1,0 +1,1144 @@
+// ============================================
+// 1. ANGULAR MODELS AND INTERFACES
+// ============================================
+
+// models/comment.model.ts
+export interface Comment {
+  id?: string;
+  content: string;
+  authorId: string;
+  authorName: string;
+  authorEmail?: string;
+  postId?: string;
+  parentCommentId?: string;
+  status: CommentStatus;
+  isApproved: boolean;
+  likeCount: number;
+  replyCount: number;
+  tags: string[];
+  createdAt: Date;
+  updatedAt: Date;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+export enum CommentStatus {
+  Active = 1,
+  Hidden = 2,
+  Deleted = 3,
+  Flagged = 4,
+  Pending = 5
+}
+
+// models/comment-filter.model.ts
+export interface CommentFilter {
+  searchTerm?: string;
+  authorId?: string;
+  authorName?: string;
+  postId?: string;
+  parentCommentId?: string;
+  status?: CommentStatus;
+  isApproved?: boolean;
+  createdFrom?: Date;
+  createdTo?: Date;
+  tags?: string[];
+  minLikes?: number;
+  maxLikes?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface PagedResult<T> {
+  data: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
+// ============================================
+// 2. ANGULAR SERVICE
+// ============================================
+
+// services/comment.service.ts
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Observable, BehaviorSubject } from 'rxjs';
+import { Comment, CommentFilter, PagedResult } from '../models/comment.model';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class CommentService {
+  private apiUrl = 'https://localhost:7000/api/comments';
+  private commentsSubject = new BehaviorSubject<PagedResult<Comment>>({
+    data: [],
+    totalCount: 0,
+    page: 1,
+    pageSize: 10,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPreviousPage: false
+  });
+
+  public comments$ = this.commentsSubject.asObservable();
+
+  constructor(private http: HttpClient) {}
+
+  getComments(filter: CommentFilter = {}): Observable<PagedResult<Comment>> {
+    const params = this.buildHttpParams(filter);
+    return this.http.get<PagedResult<Comment>>(this.apiUrl, { params });
+  }
+
+  getComment(id: string): Observable<Comment> {
+    return this.http.get<Comment>(`${this.apiUrl}/${id}`);
+  }
+
+  createComment(comment: Comment): Observable<Comment> {
+    return this.http.post<Comment>(this.apiUrl, comment);
+  }
+
+  updateComment(id: string, comment: Comment): Observable<void> {
+    return this.http.put<void>(`${this.apiUrl}/${id}`, comment);
+  }
+
+  deleteComment(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${id}`);
+  }
+
+  loadComments(filter: CommentFilter = {}): void {
+    this.getComments(filter).subscribe(result => {
+      this.commentsSubject.next(result);
+    });
+  }
+
+  private buildHttpParams(filter: CommentFilter): HttpParams {
+    let params = new HttpParams();
+
+    Object.keys(filter).forEach(key => {
+      const value = (filter as any)[key];
+      if (value !== null && value !== undefined && value !== '') {
+        if (Array.isArray(value)) {
+          value.forEach(item => {
+            params = params.append(key, item.toString());
+          });
+        } else if (value instanceof Date) {
+          params = params.set(key, value.toISOString());
+        } else {
+          params = params.set(key, value.toString());
+        }
+      }
+    });
+
+    return params;
+  }
+}
+
+// ============================================
+// 3. COMMENT FILTER COMPONENT
+// ============================================
+
+// components/comment-filter/comment-filter.component.ts
+import { Component, OnInit, Output, EventEmitter } from '@angular/core';
+import { FormBuilder, FormGroup } from '@angular/forms';
+import { CommentFilter, CommentStatus } from '../../models/comment.model';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
+
+@Component({
+  selector: 'app-comment-filter',
+  templateUrl: './comment-filter.component.html',
+  styleUrls: ['./comment-filter.component.css']
+})
+export class CommentFilterComponent implements OnInit {
+  @Output() filterChange = new EventEmitter<CommentFilter>();
+  
+  filterForm: FormGroup;
+  CommentStatus = CommentStatus;
+  statusOptions = [
+    { value: CommentStatus.Active, label: 'Active' },
+    { value: CommentStatus.Hidden, label: 'Hidden' },
+    { value: CommentStatus.Deleted, label: 'Deleted' },
+    { value: CommentStatus.Flagged, label: 'Flagged' },
+    { value: CommentStatus.Pending, label: 'Pending' }
+  ];
+
+  sortOptions = [
+    { value: 'createdAt', label: 'Created Date' },
+    { value: 'updatedAt', label: 'Updated Date' },
+    { value: 'authorName', label: 'Author Name' },
+    { value: 'likeCount', label: 'Like Count' },
+    { value: 'replyCount', label: 'Reply Count' }
+  ];
+
+  constructor(private fb: FormBuilder) {
+    this.filterForm = this.fb.group({
+      searchTerm: [''],
+      authorName: [''],
+      postId: [''],
+      status: [''],
+      isApproved: [''],
+      createdFrom: [''],
+      createdTo: [''],
+      tags: [''],
+      minLikes: [''],
+      maxLikes: [''],
+      sortBy: ['createdAt'],
+      sortOrder: ['desc'],
+      pageSize: [10]
+    });
+  }
+
+  ngOnInit(): void {
+    // Debounce search input
+    this.filterForm.get('searchTerm')?.valueChanges
+      .pipe(
+        debounceTime(300),
+        distinctUntilChanged()
+      )
+      .subscribe(() => this.onFilterChange());
+
+    // Subscribe to other form changes
+    this.filterForm.valueChanges
+      .pipe(
+        debounceTime(100),
+        distinctUntilChanged()
+      )
+      .subscribe(() => this.onFilterChange());
+  }
+
+  onFilterChange(): void {
+    const filter = this.getFilterFromForm();
+    this.filterChange.emit(filter);
+  }
+
+  private getFilterFromForm(): CommentFilter {
+    const formValue = this.filterForm.value;
+    const filter: CommentFilter = {
+      page: 1 // Reset to first page on filter change
+    };
+
+    if (formValue.searchTerm) filter.searchTerm = formValue.searchTerm;
+    if (formValue.authorName) filter.authorName = formValue.authorName;
+    if (formValue.postId) filter.postId = formValue.postId;
+    if (formValue.status !== '') filter.status = formValue.status;
+    if (formValue.isApproved !== '') filter.isApproved = formValue.isApproved === 'true';
+    if (formValue.createdFrom) filter.createdFrom = new Date(formValue.createdFrom);
+    if (formValue.createdTo) filter.createdTo = new Date(formValue.createdTo);
+    if (formValue.tags) filter.tags = formValue.tags.split(',').map((tag: string) => tag.trim());
+    if (formValue.minLikes) filter.minLikes = parseInt(formValue.minLikes);
+    if (formValue.maxLikes) filter.maxLikes = parseInt(formValue.maxLikes);
+    if (formValue.sortBy) filter.sortBy = formValue.sortBy;
+    if (formValue.sortOrder) filter.sortOrder = formValue.sortOrder;
+    if (formValue.pageSize) filter.pageSize = parseInt(formValue.pageSize);
+
+    return filter;
+  }
+
+  clearFilters(): void {
+    this.filterForm.reset({
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+      pageSize: 10
+    });
+  }
+}
+
+// components/comment-filter/comment-filter.component.html
+/*
+<div class="comment-filter-container">
+  <form [formGroup]="filterForm" class="filter-form">
+    
+    <!-- Search Section -->
+    <div class="filter-section">
+      <h3>Search</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="searchTerm">Search Comments</label>
+          <input 
+            type="text" 
+            id="searchTerm"
+            formControlName="searchTerm" 
+            placeholder="Search in content and author name..."
+            class="form-control">
+        </div>
+      </div>
+    </div>
+
+    <!-- Author Section -->
+    <div class="filter-section">
+      <h3>Author Filters</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="authorName">Author Name</label>
+          <input 
+            type="text" 
+            id="authorName"
+            formControlName="authorName" 
+            placeholder="Filter by author name..."
+            class="form-control">
+        </div>
+      </div>
+    </div>
+
+    <!-- Content Filters -->
+    <div class="filter-section">
+      <h3>Content Filters</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="postId">Post ID</label>
+          <input 
+            type="text" 
+            id="postId"
+            formControlName="postId" 
+            placeholder="Filter by post ID..."
+            class="form-control">
+        </div>
+        <div class="form-group">
+          <label for="tags">Tags (comma-separated)</label>
+          <input 
+            type="text" 
+            id="tags"
+            formControlName="tags" 
+            placeholder="tag1, tag2, tag3..."
+            class="form-control">
+        </div>
+      </div>
+    </div>
+
+    <!-- Status Filters -->
+    <div class="filter-section">
+      <h3>Status Filters</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="status">Comment Status</label>
+          <select id="status" formControlName="status" class="form-control">
+            <option value="">All Statuses</option>
+            <option *ngFor="let option of statusOptions" [value]="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="isApproved">Approval Status</label>
+          <select id="isApproved" formControlName="isApproved" class="form-control">
+            <option value="">All</option>
+            <option value="true">Approved</option>
+            <option value="false">Pending Approval</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Date Range -->
+    <div class="filter-section">
+      <h3>Date Range</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="createdFrom">Created From</label>
+          <input 
+            type="date" 
+            id="createdFrom"
+            formControlName="createdFrom" 
+            class="form-control">
+        </div>
+        <div class="form-group">
+          <label for="createdTo">Created To</label>
+          <input 
+            type="date" 
+            id="createdTo"
+            formControlName="createdTo" 
+            class="form-control">
+        </div>
+      </div>
+    </div>
+
+    <!-- Like Count Range -->
+    <div class="filter-section">
+      <h3>Engagement Filters</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="minLikes">Min Likes</label>
+          <input 
+            type="number" 
+            id="minLikes"
+            formControlName="minLikes" 
+            min="0"
+            class="form-control">
+        </div>
+        <div class="form-group">
+          <label for="maxLikes">Max Likes</label>
+          <input 
+            type="number" 
+            id="maxLikes"
+            formControlName="maxLikes" 
+            min="0"
+            class="form-control">
+        </div>
+      </div>
+    </div>
+
+    <!-- Sorting and Pagination -->
+    <div class="filter-section">
+      <h3>Sorting & Display</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="sortBy">Sort By</label>
+          <select id="sortBy" formControlName="sortBy" class="form-control">
+            <option *ngFor="let option of sortOptions" [value]="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="sortOrder">Sort Order</label>
+          <select id="sortOrder" formControlName="sortOrder" class="form-control">
+            <option value="desc">Descending</option>
+            <option value="asc">Ascending</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="pageSize">Items per Page</label>
+          <select id="pageSize" formControlName="pageSize" class="form-control">
+            <option value="5">5</option>
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="filter-actions">
+      <button type="button" (click)="clearFilters()" class="btn btn-secondary">
+        Clear Filters
+      </button>
+    </div>
+
+  </form>
+</div>
+*/
+
+// components/comment-filter/comment-filter.component.css
+/*
+.comment-filter-container {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.filter-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.filter-section {
+  background: white;
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.filter-section h3 {
+  margin: 0 0 15px 0;
+  color: #495057;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 15px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  margin-bottom: 5px;
+  font-weight: 500;
+  color: #495057;
+}
+
+.form-control {
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus {
+  border-color: #80bdff;
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 15px;
+  border-top: 1px solid #dee2e6;
+}
+
+.btn {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.btn-secondary {
+  background-color: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background-color: #5a6268;
+}
+
+@media (max-width: 768px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .comment-filter-container {
+    padding: 15px;
+  }
+}
+*/
+
+// ============================================
+// 4. COMMENT LIST COMPONENT
+// ============================================
+
+// components/comment-list/comment-list.component.ts
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
+import { CommentService } from '../../services/comment.service';
+import { Comment, CommentFilter, PagedResult, CommentStatus } from '../../models/comment.model';
+
+@Component({
+  selector: 'app-comment-list',
+  templateUrl: './comment-list.component.html',
+  styleUrls: ['./comment-list.component.css']
+})
+export class CommentListComponent implements OnInit, OnDestroy {
+  private destroy$ = new Subject<void>();
+  
+  comments: Comment[] = [];
+  currentFilter: CommentFilter = { page: 1, pageSize: 10 };
+  paginationInfo: PagedResult<Comment> = {
+    data: [],
+    totalCount: 0,
+    page: 1,
+    pageSize: 10,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPreviousPage: false
+  };
+  
+  loading = false;
+  error: string | null = null;
+  CommentStatus = CommentStatus;
+
+  constructor(private commentService: CommentService) {}
+
+  ngOnInit(): void {
+    this.loadComments();
+    
+    // Subscribe to comments updates
+    this.commentService.comments$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(result => {
+        this.comments = result.data;
+        this.paginationInfo = result;
+        this.loading = false;
+      });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  onFilterChange(filter: CommentFilter): void {
+    this.currentFilter = { ...filter, page: 1 };
+    this.loadComments();
+  }
+
+  onPageChange(page: number): void {
+    this.currentFilter.page = page;
+    this.loadComments();
+  }
+
+  loadComments(): void {
+    this.loading = true;
+    this.error = null;
+    
+    this.commentService.getComments(this.currentFilter)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (result) => {
+          this.comments = result.data;
+          this.paginationInfo = result;
+          this.loading = false;
+        },
+        error: (error) => {
+          this.error = 'Error loading comments. Please try again.';
+          this.loading = false;
+          console.error('Error loading comments:', error);
+        }
+      });
+  }
+
+  getStatusLabel(status: CommentStatus): string {
+    switch (status) {
+      case CommentStatus.Active: return 'Active';
+      case CommentStatus.Hidden: return 'Hidden';
+      case CommentStatus.Deleted: return 'Deleted';
+      case CommentStatus.Flagged: return 'Flagged';
+      case CommentStatus.Pending: return 'Pending';
+      default: return 'Unknown';
+    }
+  }
+
+  getStatusClass(status: CommentStatus): string {
+    switch (status) {
+      case CommentStatus.Active: return 'status-active';
+      case CommentStatus.Hidden: return 'status-hidden';
+      case CommentStatus.Deleted: return 'status-deleted';
+      case CommentStatus.Flagged: return 'status-flagged';
+      case CommentStatus.Pending: return 'status-pending';
+      default: return 'status-unknown';
+    }
+  }
+
+  formatDate(date: Date): string {
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  deleteComment(id: string): void {
+    if (confirm('Are you sure you want to delete this comment?')) {
+      this.commentService.deleteComment(id)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: () => {
+            this.loadComments(); // Reload comments after deletion
+          },
+          error: (error) => {
+            this.error = 'Error deleting comment. Please try again.';
+            console.error('Error deleting comment:', error);
+          }
+        });
+    }
+  }
+
+  getPaginationPages(): number[] {
+    const pages: number[] = [];
+    const currentPage = this.paginationInfo.page;
+    const totalPages = this.paginationInfo.totalPages;
+    
+    // Show up to 5 pages around current page
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+    
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    
+    return pages;
+  }
+}
+
+// components/comment-list/comment-list.component.html
+/*
+<div class="comment-list-container">
+  
+  <!-- Filter Component -->
+  <app-comment-filter (filterChange)="onFilterChange($event)"></app-comment-filter>
+  
+  <!-- Loading State -->
+  <div *ngIf="loading" class="loading-container">
+    <div class="spinner"></div>
+    <p>Loading comments...</p>
+  </div>
+  
+  <!-- Error State -->
+  <div *ngIf="error" class="error-container">
+    <p class="error-message">{{ error }}</p>
+    <button (click)="loadComments()" class="btn btn-primary">Retry</button>
+  </div>
+  
+  <!-- Comments Results -->
+  <div *ngIf="!loading && !error" class="results-container">
+    
+    <!-- Results Summary -->
+    <div class="results-summary">
+      <p>
+        Showing {{ (paginationInfo.page - 1) * paginationInfo.pageSize + 1 }} - 
+        {{ Math.min(paginationInfo.page * paginationInfo.pageSize, paginationInfo.totalCount) }} 
+        of {{ paginationInfo.totalCount }} comments
+      </p>
+    </div>
+    
+    <!-- Comments List -->
+    <div *ngIf="comments.length > 0" class="comments-grid">
+      <div *ngFor="let comment of comments" class="comment-card">
+        
+        <!-- Comment Header -->
+        <div class="comment-header">
+          <div class="author-info">
+            <h4 class="author-name">{{ comment.authorName }}</h4>
+            <span class="comment-date">{{ formatDate(comment.createdAt) }}</span>
+          </div>
+          <div class="comment-status">
+            <span [class]="'status-badge ' + getStatusClass(comment.status)">
+              {{ getStatusLabel(comment.status) }}
+            </span>
+            <span *ngIf="!comment.isApproved" class="approval-badge">
+              Pending Approval
+            </span>
+          </div>
+        </div>
+        
+        <!-- Comment Content -->
+        <div class="comment-content">
+          <p>{{ comment.content }}</p>
+        </div>
+        
+        <!-- Comment Tags -->
+        <div *ngIf="comment.tags && comment.tags.length > 0" class="comment-tags">
+          <span *ngFor="let tag of comment.tags" class="tag">{{ tag }}</span>
+        </div>
+        
+        <!-- Comment Stats -->
+        <div class="comment-stats">
+          <div class="stat">
+            <span class="stat-icon">👍</span>
+            <span class="stat-value">{{ comment.likeCount }}</span>
+          </div>
+          <div class="stat">
+            <span class="stat-icon">💬</span>
+            <span class="stat-value">{{ comment.replyCount }}</span>
+          </div>
+        </div>
+        
+        <!-- Comment Actions -->
+        <div class="comment-actions">
+          <button class="btn btn-sm btn-outline-primary">Edit</button>
+          <button class="btn btn-sm btn-outline-danger" (click)="deleteComment(comment.id!)">
+            Delete
+          </button>
+        </div>
+        
+      </div>
+    </div>
+    
+    <!-- No Results -->
+    <div *ngIf="comments.length === 0" class="no-results">
+      <p>No comments found matching your filter criteria.</p>
+    </div>
+    
+    <!-- Pagination -->
+    <div *ngIf="paginationInfo.totalPages > 1" class="pagination-container">
+      <nav class="pagination">
+        
+        <!-- Previous Button -->
+        <button 
+          class="btn btn-outline-secondary"
+          [disabled]="!paginationInfo.hasPreviousPage"
+          (click)="onPageChange(paginationInfo.page - 1)">
+          Previous
+        </button>
+        
+        <!-- Page Numbers -->
+        <button 
+          *ngFor="let page of getPaginationPages()"
+          class="btn"
+          [class.btn-primary]="page === paginationInfo.page"
+          [class.btn-outline-secondary]="page !== paginationInfo.page"
+          (click)="onPageChange(page)">
+          {{ page }}
+        </button>
+        
+        <!-- Next Button -->
+        <button 
+          class="btn btn-outline-secondary"
+          [disabled]="!paginationInfo.hasNextPage"
+          (click)="onPageChange(paginationInfo.page + 1)">
+          Next
+        </button>
+        
+      </nav>
+      
+      <!-- Page Info -->
+      <div class="page-info">
+        Page {{ paginationInfo.page }} of {{ paginationInfo.totalPages }}
+      </div>
+    </div>
+    
+  </div>
+</div>
+*/
+
+// components/comment-list/comment-list.component.css
+/*
+.comment-list-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.error-container {
+  text-align: center;
+  padding: 40px;
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.error-message {
+  color: #721c24;
+  margin-bottom: 15px;
+}
+
+.results-summary {
+  background: white;
+  padding: 15px;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  color: #6c757d;
+}
+
+.comments-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.comment-card {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  transition: box-shadow 0.2s ease;
+}
+
+.comment-card:hover {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.comment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+.author-info h4 {
+  margin: 0;
+  color: #495057;
+}
+
+.comment-date {
+  color: #6c757d;
+  font-size: 14px;
+}
+
+.comment-status {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-active { background: #d4edda; color: #155724; }
+.status-hidden { background: #fff3cd; color: #856404; }
+.status-deleted { background: #f8d7da; color: #721c24; }
+.status-flagged { background: #f1c0c7; color: #721c24; }
+.status-pending { background: #d1ecf1; color: #0c5460; }
+
+.approval-badge {
+  background: #fff3cd;
+  color: #856404;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.comment-content {
+  margin-bottom: 15px;
+  line-height: 1.6;
+}
+
+.comment-tags {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  background: #e9ecef;
+  color: #495057;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.comment-stats {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 15px;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #6c757d;
+  font-size: 14px;
+}
+
+.comment-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.btn {
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  text-decoration: none;
+  display: inline-block;
+  transition: all 0.15s ease-in-out;
+}
+
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.btn-primary {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.btn-outline-primary {
+  color: #007bff;
+  border-color: #007bff;
+}
+
+.btn-outline-primary:hover {
+  background: #007bff;
+  color: white;
+}
+
+.btn-outline-danger {
+  color: #dc3545;
+  border-color: #dc3545;
+}
+
+.btn-outline-danger:hover {
+  background: #dc3545;
+  color: white;
+}
+
+.btn-outline-secondary {
+  color: #6c757d;
+  border-color: #6c757d;
+}
+
+.btn-outline-secondary:hover {
+  background: #6c757d;
+  color: white;
+}
+
+.btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.no-results {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6c757d;
+  font-size: 18px;
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 30px;
+  padding: 20px;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+}
+
+.pagination {
+  display: flex;
+  gap: 5px;
+}
+
+.page-info {
+  color: #6c757d;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .comment-list-container {
+    padding: 10px;
+  }
+  
+  .comment-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .comment-actions {
+    justify-content: center;
+  }
+  
+  .pagination-container {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+*/
+
+// ============================================
+// 5. APP MODULE SETUP
+// ============================================
+
+// app.module.ts
+import { NgModule } from '@angular/core';
+import { BrowserModule } from '@angular/platform-browser';
+import { ReactiveFormsModule } from '@angular/forms';
+import { HttpClientModule } from '@angular/common/http';
+
+import { AppComponent } from './app.component';
+import { CommentListComponent } from './components/comment-list/comment-list.component';
+import { CommentFilterComponent } from './components/comment-filter/comment-filter.component';
+
+@NgModule({
+  declarations: [
+    AppComponent,
+    CommentListComponent,
+    CommentFilterComponent
+  ],
+  imports: [
+    BrowserModule,
+    ReactiveFormsModule,
+    HttpClientModule
+  ],
+  providers: [],
+  bootstrap: [AppComponent]
+})
+export class AppModule { }
+
+// app.component.html
+/*
+<div class="app-container">
+  <header class="app-header">
+    <h1>Comment Management System</h1>
+    <p>Advanced filtering and management for MongoDB comments</p>
+  </header>
+  
+  <main class="app-main">
+    <app-comment-list></app-comment-list>
+  </main>
+</div>
+*/
+
+// app.component.css
+/*
+.app-container {
+  min-height: 100vh;
+  background: #f8f9fa;
+}
+
+.app-header {
+  background: white;
+  padding: 30px;
+  text-align: center;
+  border-bottom: 1px solid #dee2e6;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.app-header h1 {
+  margin: 0 0 10px 0;
+  color: #495057;
+}
+
+.app-header p {
+  margin: 0;
+  color: #6c757d;
+}
+
+.app-main {
+  padding: 0;
+}
+*/
