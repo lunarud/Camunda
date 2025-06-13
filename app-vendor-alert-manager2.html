@@ -1,0 +1,290 @@
+<div class="vendor-alert-container">
+  <!-- Header Navigation -->
+  <mat-tab-group class="header-tabs" mat-align-tabs="start">
+    <mat-tab>
+      <ng-template mat-tab-label>
+        <mat-icon>folder</mat-icon>
+        Case Manager
+      </ng-template>
+    </mat-tab>
+    <mat-tab>
+      <ng-template mat-tab-label>
+        <mat-icon>warning</mat-icon>
+        Alert Manager
+      </ng-template>
+    </mat-tab>
+    <mat-tab>
+      <ng-template mat-tab-label>
+        <mat-icon>list</mat-icon>
+        Alert Details
+      </ng-template>
+    </mat-tab>
+    <mat-tab label="Vendor List" [disabled]="false"></mat-tab>
+    <mat-tab>
+      <ng-template mat-tab-label>
+        <mat-icon>search</mat-icon>
+        Case Analysis
+      </ng-template>
+    </mat-tab>
+    <mat-tab>
+      <ng-template mat-tab-label>
+        <mat-icon>track_changes</mat-icon>
+        Case Tracking
+      </ng-template>
+    </mat-tab>
+  </mat-tab-group>
+
+  <div class="content-layout">
+    <!-- Left Sidebar - Filters -->
+    <mat-card class="filter-sidebar">
+      <mat-card-header>
+        <mat-card-title>
+          <mat-icon>filter_list</mat-icon>
+          Alert Filters
+        </mat-card-title>
+      </mat-card-header>
+      
+      <mat-card-content>
+        <!-- Alert Assigned To -->
+        <div class="filter-section">
+          <label class="filter-label">ALERT ASSIGNED TO</label>
+          <mat-form-field appearance="outline" class="full-width">
+            <input matInput placeholder="Search..." [(ngModel)]="alertAssignedTo">
+          </mat-form-field>
+        </div>
+
+        <!-- Alert Created On -->
+        <div class="filter-section">
+          <label class="filter-label">ALERT CREATED ON</label>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-select [(value)]="alertCreatedOnRange">
+              <mat-option value="Time range">Time range</mat-option>
+              <mat-option value="Today">Today</mat-option>
+              <mat-option value="Yesterday">Yesterday</mat-option>
+              <mat-option value="Last 7 days">Last 7 days</mat-option>
+            </mat-select>
+          </mat-form-field>
+          
+          <div class="time-range">
+            <label class="time-label">After</label>
+            <mat-form-field appearance="outline" class="time-field">
+              <input matInput [(ngModel)]="alertAfterTime" placeholder="Start time">
+              <mat-select matSuffix>
+                <mat-option value="GMT+2">GMT+2</mat-option>
+              </mat-select>
+            </mat-form-field>
+            
+            <label class="time-label">Before</label>
+            <mat-form-field appearance="outline" class="time-field">
+              <input matInput [(ngModel)]="alertBeforeTime" placeholder="End time">
+              <mat-select matSuffix>
+                <mat-option value="GMT+2">GMT+2</mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
+        </div>
+
+        <!-- Alert Status -->
+        <div class="filter-section">
+          <label class="filter-label">ALERT STATUS</label>
+          <div class="checkbox-group">
+            <mat-checkbox 
+              [(ngModel)]="alertStatus.level1New.checked"
+              class="status-checkbox level1-new">
+              Level 1 - New
+              <span class="count-badge">{{alertStatus.level1New.count}}</span>
+            </mat-checkbox>
+            
+            <mat-checkbox 
+              [(ngModel)]="alertStatus.level2Investigation.checked"
+              class="status-checkbox">
+              Level 2 - Investigation in progr...
+              <span class="count-badge">{{alertStatus.level2Investigation.count}}</span>
+            </mat-checkbox>
+            
+            <mat-checkbox 
+              [(ngModel)]="alertStatus.level2Report.checked"
+              class="status-checkbox">
+              Level 2 - Report in progress
+              <span class="count-badge">{{alertStatus.level2Report.count}}</span>
+            </mat-checkbox>
+            
+            <mat-checkbox 
+              [(ngModel)]="alertStatus.inCase.checked"
+              class="status-checkbox">
+              In case
+              <span class="count-badge">{{alertStatus.inCase.count}}</span>
+            </mat-checkbox>
+            
+            <mat-checkbox 
+              [(ngModel)]="alertStatus.level2Closed.checked"
+              class="status-checkbox">
+              Level 2 - Case closed with an e...
+              <span class="count-badge">{{alertStatus.level2Closed.count}}</span>
+            </mat-checkbox>
+          </div>
+          <button mat-button class="show-more-btn" (click)="showMore()">Show more</button>
+        </div>
+
+        <!-- Scenario Name -->
+        <div class="filter-section">
+          <label class="filter-label">SCENARIO NAME</label>
+          <div class="checkbox-group">
+            <mat-checkbox 
+              [(ngModel)]="scenarioName.shoppingCartStringing.checked"
+              class="scenario-checkbox">
+              Shopping Cart Stringing
+              <span class="count-badge active">{{scenarioName.shoppingCartStringing.count}}</span>
+            </mat-checkbox>
+          </div>
+        </div>
+
+        <!-- Alert ID -->
+        <div class="filter-section">
+          <label class="filter-label">ALERT ID</label>
+          <mat-form-field appearance="outline" class="full-width">
+            <input matInput [(ngModel)]="alertId">
+          </mat-form-field>
+        </div>
+
+        <button mat-stroked-button class="add-filter-btn" (click)="addFilter()">
+          Add filter
+        </button>
+      </mat-card-content>
+    </mat-card>
+
+    <!-- Main Content Area -->
+    <div class="main-content">
+      <!-- Vendor List Header -->
+      <div class="section-header">
+        <div class="header-content">
+          <mat-icon>list</mat-icon>
+          <h2>Vendor list</h2>
+        </div>
+        <button mat-raised-button color="warn" class="create-alert-btn" (click)="createManualAlert()">
+          <mat-icon>add</mat-icon>
+          Create manual alert
+        </button>
+      </div>
+
+      <!-- Vendor List Grid -->
+      <div class="grid-container">
+        <ag-grid-angular
+          #vendorGrid
+          class="ag-theme-material vendor-grid"
+          [rowData]="vendorRowData"
+          [columnDefs]="vendorColumnDefs"
+          [defaultColDef]="{resizable: true, sortable: true, filter: true}"
+          [animateRows]="true"
+          [rowSelection]="'single'"
+          (gridReady)="onVendorGridReady($event)"
+          (rowClicked)="onVendorRowClicked($event)"
+          [domLayout]="'autoHeight'">
+        </ag-grid-angular>
+      </div>
+
+      <!-- Vendor Deep Dive Section -->
+      <div class="vendor-deep-dive" *ngIf="selectedVendor">
+        <div class="deep-dive-header">
+          <div class="vendor-info">
+            <span class="vendor-label">Vendor deep dive</span>
+            <span class="vendor-id">ID: {{selectedVendor.vendorId}}</span>
+            <span class="vendor-name">Name: {{selectedVendor.title}}</span>
+          </div>
+          <button mat-icon-button class="expand-btn">
+            <mat-icon>expand_less</mat-icon>
+          </button>
+        </div>
+
+        <div class="deep-dive-content">
+          <!-- Alert List Tab -->
+          <mat-tab-group>
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <mat-icon>warning</mat-icon>
+                Level 1 - Alert list
+              </ng-template>
+              
+              <div class="alert-grid-container">
+                <ag-grid-angular
+                  #alertGrid
+                  class="ag-theme-material alert-grid"
+                  [rowData]="alertRowData"
+                  [columnDefs]="alertColumnDefs"
+                  [defaultColDef]="{resizable: true, sortable: true, filter: true}"
+                  [animateRows]="true"
+                  [rowSelection]="'multiple'"
+                  [rowMultiSelectWithClick]="true"
+                  (gridReady)="onAlertGridReady($event)"
+                  [domLayout]="'autoHeight'">
+                </ag-grid-angular>
+              </div>
+            </mat-tab>
+            
+            <mat-tab>
+              <ng-template mat-tab-label>
+                <mat-icon>folder</mat-icon>
+                Level 2 - Case list
+              </ng-template>
+              
+              <div class="case-details">
+                <div class="case-info-card">
+                  <div class="case-header">
+                    <mat-icon>description</mat-icon>
+                    <span class="case-title">2024-06-04T15:08:38.795+00:00 - Investigation Client _800_|_0000005571</span>
+                  </div>
+                  <div class="case-details-grid">
+                    <div class="case-detail">
+                      <span class="label">Assigned To:</span>
+                      <span class="value">Lukas Braunschweig</span>
+                    </div>
+                    <div class="case-detail">
+                      <span class="label">Case Created:</span>
+                      <span class="value">Jun 4, 2024, 5:08 PM</span>
+                    </div>
+                    <div class="case-detail">
+                      <span class="label">Case Status:</span>
+                      <span class="status-badge status-approved">Level 2 - Report approved</span>
+                    </div>
+                    <div class="case-detail">
+                      <span class="label">Case Modified:</span>
+                      <span class="value">Jun 4, 2024, 5:26 PM</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </mat-tab>
+          </mat-tab-group>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="action-buttons">
+        <div class="left-actions">
+          <button mat-stroked-button (click)="assignAlerts()">
+            <mat-icon>person_add</mat-icon>
+            Assign alerts
+          </button>
+          <button mat-stroked-button color="accent" (click)="closeAlertsAtLevel1()">
+            <mat-icon>close</mat-icon>
+            Close alerts at level 1
+          </button>
+          <button mat-stroked-button color="primary" (click)="createNewCase()">
+            <mat-icon>add</mat-icon>
+            Create new case
+          </button>
+          <button mat-stroked-button (click)="addAlertsToExistingCase()">
+            <mat-icon>add_box</mat-icon>
+            Add alerts to existing case
+          </button>
+        </div>
+        <div class="right-actions">
+          <button mat-raised-button color="warn" class="investigate-btn" (click)="investigate()">
+            <mat-icon>search</mat-icon>
+            Investigate
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
