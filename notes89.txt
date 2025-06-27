@@ -1,0 +1,138 @@
+# Reviewer Workflow Screen - User Guide
+
+## Overview
+The Reviewer Workflow Screen is a centralized interface for managing access requests and group membership approvals. This screen allows authorized reviewers to evaluate and approve or reject various types of user access requests within the system.
+
+## Screen Layout
+
+### Main Navigation
+- **Reviewer tasks**: Primary tab showing all pending review items
+- **One reviewer requested**: Filter dropdown to show items requiring single reviewer approval
+- **Actions**: Bulk action dropdown menu
+- **Comments**: Panel for viewing and adding comments to requests
+
+### Primary Actions
+The screen provides two main bulk actions available via the Actions dropdown:
+- **Approve all**: Approve all visible pending requests
+- **Reject all**: Reject all visible pending requests
+
+## Request Types
+
+### 1. Marking Access Request
+**Purpose**: Grants users access to marking/tagging systems with specific permission levels
+
+**Details shown**:
+- **Marking level**: Displays the permission tier (e.g., "basic: PII")
+- **Users to be added**: Shows the requesting user (e.g., Elijah Kimball)
+- **Your review**: Status indicator and action buttons
+
+**Actions available**:
+- Individual review using the "Review" button
+- Bulk approval/rejection via Actions menu
+
+### 2. Group Membership Request
+**Purpose**: Manages requests to add users to specific groups or projects
+
+**Details shown**:
+- **User to add**: The requesting user's name and profile
+- **Group to update**: Target group name and type (e.g., "Aircraft delays [Datasource] - Viewer")
+- **Group role on project**: Assigned role level (e.g., "Viewer")
+
+**Actions available**:
+- Individual review with comment count indicator
+- Bulk approval/rejection options
+
+## Comments Panel
+
+### Viewing Comments
+- Located on the right side of the screen
+- Shows all comments related to the selected request
+- Displays commenter name, message, and timestamp
+- Filter comments using the "All" dropdown
+
+### Adding Comments
+- Use the "Add a comment" text box at the bottom
+- Formatting options available (Bold, Italic, Links, Attachments)
+- Click "Comment" button to submit
+
+### Sample Comment Thread
+The example shows:
+- **Elijah Kimball**: "Yes. I work with Shawn."
+- **Follow-up question**: "Do you only need Viewer permission?"
+- **Response**: "yes" (Today at 1:48 PM)
+
+## How to Use the Workflow
+
+### Step 1: Review Pending Tasks
+1. Navigate to the "Reviewer tasks" section
+2. Review "Tasks eligible for your approval"
+3. Examine each request type and associated details
+
+### Step 2: Evaluate Individual Requests
+1. Click on a specific request to expand details
+2. Review the user information and requested permissions
+3. Check the comments panel for additional context
+4. Consider the business justification and user's role
+
+### Step 3: Take Action
+**For individual requests**:
+- Click "Review" to open detailed review options
+- Add comments if clarification is needed
+- Approve or reject based on your assessment
+
+**For bulk actions**:
+- Use the Actions dropdown to "Approve all" or "Reject all"
+- This applies to all currently visible requests
+
+### Step 4: Document Decision
+1. Add comments explaining your decision rationale
+2. Include any conditions or time limitations
+3. Tag relevant stakeholders if needed
+
+## Best Practices
+
+### Before Approving
+- Verify the user's identity and role
+- Confirm the requested access level is appropriate
+- Check for any security or compliance concerns
+- Review business justification in comments
+
+### Documentation
+- Always document significant decisions
+- Include reasoning for rejections
+- Note any special conditions or time limits
+- Reference relevant policies or procedures
+
+### Communication
+- Respond to user questions promptly
+- Provide clear explanations for rejections
+- Suggest alternative access levels when appropriate
+- Escalate complex cases to senior reviewers
+
+## Troubleshooting
+
+### Common Issues
+- **Missing information**: Request additional details via comments
+- **Unclear business need**: Ask for justification from the requester
+- **Policy questions**: Consult security team or documentation
+- **Technical issues**: Contact system administrator
+
+### Escalation
+When to escalate requests:
+- High-risk access requests
+- Unusual or suspicious patterns
+- Policy interpretation questions
+- Technical system issues
+
+## Security Considerations
+- Verify user identity before granting access
+- Apply principle of least privilege
+- Monitor for unusual access patterns
+- Document all decisions for audit purposes
+- Report suspicious requests to security team
+
+## Related Documentation
+- User Access Policy
+- Security Guidelines
+- Group Management Procedures
+- Audit and Compliance Requirements
