@@ -1,0 +1,691 @@
+# Camunda Workflow System Wiki
+
+## Table of Contents
+1. [Overview](#overview)
+2. [Inbox Management](#inbox-management)
+3. [Workflow Actions](#workflow-actions)
+4. [Comments & Notifications](#comments--notifications)
+5. [Payload Viewers](#payload-viewers)
+6. [Testing Tools](#testing-tools)
+7. [Deployment Management](#deployment-management)
+8. [Support & Troubleshooting](#support--troubleshooting)
+
+---
+
+## Overview
+
+The Camunda Workflow System is a comprehensive business process management platform that provides users with tools to manage, monitor, and optimize workflow processes. The system includes an intuitive inbox interface, robust testing capabilities, and comprehensive monitoring features.
+
+### Key Features
+- **Inbox Management**: Centralized task and workflow management
+- **Action Processing**: Approve, reject, and withdraw workflows with reason tracking
+- **Communication**: Comments and notifications system
+- **Monitoring**: Real-time workflow state visibility
+- **Testing**: Comprehensive testing framework for workflow validation
+- **Version Control**: BPMN file and configuration management
+
+---
+
+## Inbox Management
+
+The Inbox serves as the central hub for all workflow-related activities, providing users with organized views of their tasks and workflows.
+
+### Inbox Categories
+
+#### Open Workflows
+Displays all currently active workflows in the system.
+
+**Features:**
+- Real-time status updates
+- Priority-based sorting
+- Filtering by workflow type, date, or assignee
+- Bulk operations support
+
+**Access Path:** `Dashboard > Inbox > Open Workflows`
+
+#### Open Tasks
+Shows all pending tasks that require user attention.
+
+**Features:**
+- Task assignment tracking
+- Due date monitoring
+- Task dependency visualization
+- Quick action buttons
+
+**Access Path:** `Dashboard > Inbox > Open Tasks`
+
+#### My Tasks
+Personal task view filtered to the current user's assignments.
+
+**Features:**
+- Personalized dashboard
+- Task priority indicators
+- Quick completion actions
+- Performance metrics
+
+**Access Path:** `Dashboard > Inbox > My Tasks`
+
+#### Completed Tasks
+Historical view of all completed tasks and workflows.
+
+**Features:**
+- Completion audit trail
+- Performance analytics
+- Searchable history
+- Export capabilities
+
+**Access Path:** `Dashboard > Inbox > Completed Tasks`
+
+### Inbox Navigation
+```
+Inbox/
+├── Open Workflows/
+│   ├── All Active Processes
+│   ├── High Priority
+│   └── Overdue
+├── Open Tasks/
+│   ├── Unassigned
+│   ├── In Progress
+│   └── Pending Review
+├── My Tasks/
+│   ├── Assigned to Me
+│   ├── Due Today
+│   └── Overdue
+└── Completed Tasks/
+    ├── Recently Completed
+    ├── My Completed Tasks
+    └── Archive
+```
+
+---
+
+## Workflow Actions
+
+The system supports three primary actions for workflow management, each with comprehensive reason tracking and audit capabilities.
+
+### Primary Actions
+
+#### Approve Action
+Moves the workflow forward to the next step in the process.
+
+**Usage:**
+1. Select workflow/task from inbox
+2. Click "Approve" button
+3. Add optional comments
+4. Confirm action
+
+**Permissions:** Requires approval rights for the specific workflow type
+
+#### Reject Action
+Stops the workflow and returns it to a previous state or cancels it entirely.
+
+**Process:**
+1. Select workflow/task
+2. Click "Reject" button
+3. **Required:** Enter rejection reason
+4. Select return point (if applicable)
+5. Add comments (optional)
+6. Confirm rejection
+
+**Rejection Reason Categories:**
+- Incomplete Information
+- Policy Violation
+- Technical Issues
+- Business Rule Violation
+- Other (with mandatory description)
+
+#### Withdraw Action
+Allows the workflow initiator or authorized users to cancel a workflow.
+
+**Process:**
+1. Navigate to workflow
+2. Click "Withdraw" button
+3. **Required:** Enter withdrawal reason
+4. Confirm withdrawal
+
+**Withdrawal Reason Categories:**
+- Request No Longer Needed
+- Duplicate Request
+- Incorrect Information Submitted
+- Process Change Required
+- Other (with mandatory description)
+
+### Reason Storage System
+
+All withdrawal and rejection reasons are stored in the system for:
+- **Audit Compliance**: Complete action history
+- **Analytics**: Pattern identification and process improvement
+- **Support**: Troubleshooting and user assistance
+- **Reporting**: Management dashboards and metrics
+
+**Data Retention:**
+- Reasons stored for minimum 7 years
+- Indexed for fast retrieval
+- Encrypted for sensitive information
+- Backed up with workflow data
+
+---
+
+## Comments & Notifications
+
+The system provides comprehensive communication tools to facilitate collaboration and maintain transparency throughout the workflow lifecycle.
+
+### Comments System
+
+#### Workflow Comments
+Comments can be added at the workflow level, visible to all participants.
+
+**Features:**
+- Rich text formatting
+- File attachments
+- @mention notifications
+- Comment threading
+- Edit/delete permissions
+
+**Comment Types:**
+- **Public Comments**: Visible to all workflow participants
+- **Internal Comments**: Visible only to internal team members
+- **System Comments**: Automated comments from system actions
+
+#### Task Comments
+Task-specific comments for detailed collaboration on individual tasks.
+
+**Features:**
+- Task-specific context
+- Assignee notifications
+- Comment history
+- Status change triggers
+
+### Notifications System
+
+#### Workflow Notifications
+Automated notifications for key workflow events.
+
+**Notification Triggers:**
+- Workflow initiated
+- Status changes
+- Assignment updates
+- Approval/rejection actions
+- Due date reminders
+- Escalation alerts
+
+#### Task Notifications
+Task-specific notification system.
+
+**Notification Types:**
+- Task assignment
+- Due date approaching
+- Task completion
+- Priority changes
+- Comment additions
+
+#### Notification Channels
+- **In-App**: Dashboard notifications
+- **Email**: Configurable email alerts
+- **SMS**: Critical alerts only
+- **Webhook**: Integration with external systems
+
+### Activity Logging
+
+Every workflow step is automatically logged for support and audit purposes.
+
+**Logged Information:**
+- Timestamp of action
+- User performing action
+- Action type (approve, reject, withdraw, comment, etc.)
+- Before/after state
+- IP address and session information
+- Associated comments or reasons
+
+**Log Retention:**
+- Permanent storage for audit compliance
+- Searchable and filterable
+- Export capabilities for analysis
+- Integration with monitoring tools
+
+---
+
+## Payload Viewers
+
+The system provides comprehensive visualization and inspection tools for workflow data and diagrams.
+
+### Workflow Diagram Viewer
+
+Interactive BPMN diagram visualization showing the current state of workflows.
+
+**Features:**
+- **Real-time State**: Current position highlighted
+- **Path History**: Completed steps visualization
+- **Interactive Elements**: Click elements for details
+- **Zoom Controls**: Detailed view capabilities
+- **Export Options**: PNG, SVG, PDF formats
+
+**Access:** `Workflow Details > Diagram View`
+
+### Workflow Request Payload Viewer
+
+Comprehensive view of the initial request data that started the workflow.
+
+**Display Formats:**
+- **JSON Tree**: Hierarchical data structure
+- **Raw JSON**: Plain text format
+- **Table View**: Key-value pair display
+- **Formatted View**: Pretty-printed with syntax highlighting
+
+**Features:**
+- Search within payload
+- Copy to clipboard
+- Export functionality
+- Data validation indicators
+
+### Variable State Viewer
+
+Real-time view of workflow and task variables for support and troubleshooting.
+
+#### Workflow Variables
+All variables associated with the workflow instance.
+
+**Information Displayed:**
+- Variable name and type
+- Current value
+- Last modified timestamp
+- Modification history
+- Data source
+
+#### Task Variables
+Variables specific to individual tasks within the workflow.
+
+**Features:**
+- Task-specific variable scope
+- Local vs. global variable distinction
+- Variable inheritance tracking
+- Change audit trail
+
+### Support and Maps Usage
+
+The payload viewers are specifically designed to assist support teams and system mapping.
+
+**Support Features:**
+- **Error Diagnosis**: Identify data issues causing failures
+- **State Reconstruction**: Understand workflow progression
+- **Performance Analysis**: Identify bottlenecks in data processing
+- **User Assistance**: Help users understand workflow status
+
+**Maps Integration:**
+- **Data Flow Mapping**: Visualize data movement through processes
+- **System Integration Points**: Identify external system interactions
+- **Dependency Tracking**: Understand data dependencies
+- **Impact Analysis**: Assess changes across the system
+
+---
+
+## Testing Tools
+
+The testing framework treats workflow data and configurations like code, providing comprehensive version control and testing capabilities.
+
+### Data as Code Philosophy
+
+All workflow-related data is managed with software development best practices:
+
+**Version Control Integration:**
+- Git-based versioning for all configurations
+- Branch-based development workflow
+- Pull request reviews for changes
+- Automated testing on commits
+- Rollback capabilities
+
+### Workflow Configuration Management
+
+#### Variable Management
+Centralized management of workflow variables and data contracts.
+
+**Features:**
+- **Variable Templates**: Reusable variable definitions
+- **Data Contracts**: Schema validation for workflow inputs/outputs
+- **Environment Configurations**: Dev, staging, production variable sets
+- **Dependency Tracking**: Variable relationship mapping
+
+**Configuration Structure:**
+```
+workflows/
+├── variables/
+│   ├── global/
+│   ├── workflow-type-specific/
+│   └── environment-specific/
+├── contracts/
+│   ├── input-schemas/
+│   ├── output-schemas/
+│   └── validation-rules/
+└── configurations/
+    ├── dev/
+    ├── staging/
+    └── production/
+```
+
+#### BPMN File Management
+Version-controlled storage and management of workflow definitions.
+
+**Features:**
+- **Version History**: Complete change tracking
+- **Diff Visualization**: Compare BPMN versions
+- **Branch Management**: Feature development isolation
+- **Deployment Tracking**: Which version is deployed where
+- **Rollback Support**: Quick reversion to previous versions
+
+### Payload Testing Framework
+
+Comprehensive testing suite for workflow payloads and data handling.
+
+#### Test Categories
+
+**Structure Tests:**
+- Schema validation
+- Required field presence
+- Data type verification
+- Nested object validation
+
+**Schema Tests:**
+- JSON Schema compliance
+- Field constraint validation
+- Format verification (dates, emails, etc.)
+- Custom business rule validation
+
+**Data Validation Tests:**
+- Business logic validation
+- Cross-field validation
+- Reference data integrity
+- Calculated field accuracy
+
+**Serialization/Deserialization Tests:**
+- JSON parsing accuracy
+- Data integrity through transformations
+- Character encoding handling
+- Binary data handling
+
+**Size and Performance Tests:**
+- Payload size limits
+- Processing time benchmarks
+- Memory usage monitoring
+- Throughput testing
+
+**Edge Case Tests:**
+- Null value handling
+- Empty string processing
+- Maximum value testing
+- Boundary condition validation
+
+**Error Handling Tests:**
+- Invalid data processing
+- System failure scenarios
+- Timeout handling
+- Recovery mechanisms
+
+**Transformation Tests:**
+- Data mapping accuracy
+- Field transformation logic
+- Data enrichment processes
+- Format conversion validation
+
+**Security Tests:**
+- Input sanitization
+- Injection attack prevention
+- Access control validation
+- Data encryption verification
+
+### Test Organization
+
+Tests are organized by multiple dimensions for comprehensive coverage:
+
+#### By Workflow Type
+```
+tests/
+├── purchase-order-workflow/
+├── employee-onboarding/
+├── expense-approval/
+└── contract-management/
+```
+
+#### By Test Type
+```
+tests/
+├── integration/
+│   ├── api-integration/
+│   ├── database-integration/
+│   └── external-system-integration/
+├── end-to-end/
+│   ├── complete-workflow-tests/
+│   └── user-journey-tests/
+├── happy-path/
+│   ├── standard-scenarios/
+│   └── optimal-conditions/
+├── error-handling/
+│   ├── system-errors/
+│   ├── user-errors/
+│   └── data-errors/
+└── edge-cases/
+    ├── boundary-conditions/
+    ├── unusual-data/
+    └── stress-scenarios/
+```
+
+### Test Execution Framework
+
+**Automated Testing:**
+- Continuous integration pipeline
+- Scheduled regression testing
+- Performance monitoring
+- Automated reporting
+
+**Manual Testing:**
+- Exploratory testing tools
+- User acceptance testing framework
+- Bug reproduction environment
+- Test case management
+
+---
+
+## Deployment Management
+
+The system provides sophisticated deployment management organized by test categories and environments.
+
+### Deployment Strategy
+
+#### Environment Pipeline
+```
+Development → Testing → Staging → Production
+```
+
+Each environment has specific deployment criteria based on test results:
+
+**Development Environment:**
+- Continuous deployment from feature branches
+- Basic smoke tests required
+- Individual developer testing
+
+**Testing Environment:**
+- Triggered by completed test suites
+- Full integration test suite must pass
+- Quality assurance validation
+
+**Staging Environment:**
+- Requires all test categories to pass
+- Performance benchmarks must be met
+- User acceptance testing completion
+
+**Production Environment:**
+- Full test suite completion
+- Security audit approval
+- Change management approval
+
+### Test-Driven Deployments
+
+Deployments are organized and gated by test completion:
+
+#### Happy Path Tests
+**Requirements for deployment:**
+- All standard workflow scenarios pass
+- Performance benchmarks met
+- User interface tests completed
+
+#### Error Handling Tests
+**Deployment gates:**
+- Error recovery mechanisms validated
+- Fallback procedures tested
+- Alert systems functional
+
+#### Edge Case Tests
+**Production readiness criteria:**
+- Boundary condition handling verified
+- Stress testing completed
+- Resource limit testing passed
+
+#### Integration Tests
+**Deployment prerequisites:**
+- API integration tests pass
+- Database connectivity verified
+- External system integration confirmed
+
+### Deployment Automation
+
+**Automated Deployment Pipeline:**
+1. **Code Commit**: Developer commits to version control
+2. **Automated Testing**: Full test suite execution
+3. **Quality Gates**: Test results evaluation
+4. **Environment Promotion**: Automatic deployment to next environment
+5. **Verification**: Post-deployment testing
+6. **Notification**: Stakeholder communication
+
+**Rollback Procedures:**
+- Automated rollback triggers
+- Database migration reversals
+- Configuration restoration
+- User communication protocols
+
+### Configuration Management
+
+**Environment-Specific Configurations:**
+- Database connection strings
+- External service endpoints
+- Feature flags
+- Performance tuning parameters
+
+**Version Synchronization:**
+- BPMN file versions
+- Configuration versions
+- Database schema versions
+- Application code versions
+
+---
+
+## Support & Troubleshooting
+
+### Common Issues and Solutions
+
+#### Workflow Stuck in Process
+**Symptoms:** Workflow not progressing, tasks not completing
+**Diagnosis Steps:**
+1. Check workflow diagram for current position
+2. Review variable states for blocking conditions
+3. Examine activity logs for error messages
+4. Verify user permissions and assignments
+
+**Solutions:**
+- Manual task completion
+- Variable value correction
+- Process instance migration
+- Escalation to system administrator
+
+#### Payload Validation Errors
+**Symptoms:** Workflows failing at validation steps
+**Diagnosis Steps:**
+1. Use payload viewer to examine request data
+2. Compare against data contract schema
+3. Check transformation logs
+4. Review validation rules
+
+**Solutions:**
+- Data correction and resubmission
+- Schema updates for new requirements
+- Transformation logic updates
+- User training on data requirements
+
+#### Performance Issues
+**Symptoms:** Slow workflow processing, timeouts
+**Diagnosis Steps:**
+1. Review performance test results
+2. Analyze system resource usage
+3. Check database query performance
+4. Examine external system response times
+
+**Solutions:**
+- Database optimization
+- Workflow redesign
+- Resource scaling
+- External system integration improvements
+
+### Monitoring and Alerts
+
+**System Health Monitoring:**
+- Workflow completion rates
+- Average processing times
+- Error rates by workflow type
+- System resource utilization
+
+**Automated Alerts:**
+- Workflow failures
+- Performance degradation
+- System resource limits
+- Security incidents
+
+### User Support
+
+**Self-Service Resources:**
+- User documentation
+- Video tutorials
+- FAQ database
+- Community forums
+
+**Support Channels:**
+- Help desk ticketing system
+- Live chat support
+- Email support
+- Phone support for critical issues
+
+**Escalation Procedures:**
+- Level 1: Basic user support
+- Level 2: Technical workflow issues
+- Level 3: System administration
+- Level 4: Development team intervention
+
+---
+
+## Appendices
+
+### Glossary
+
+**BPMN**: Business Process Model and Notation - standard for business process diagrams
+**Payload**: Data package sent with workflow requests
+**Variable State**: Current values of workflow variables
+**Data Contract**: Agreement defining data structure and validation rules
+**Deployment Pipeline**: Automated process for moving code through environments
+
+### API Documentation
+
+For detailed API documentation, refer to the separate API documentation wiki pages:
+- [Workflow API Reference](workflow-api.md)
+- [Task Management API](task-api.md)
+- [Notification API](notification-api.md)
+- [Testing API](testing-api.md)
+
+### Contact Information
+
+**System Administrators**: [admin-email@company.com]
+**Development Team**: [dev-team@company.com]
+**User Support**: [support@company.com]
+**Emergency Contact**: [emergency@company.com]
+
+---
+
+*Last Updated: [Current Date]*
+*Version: 1.0*
+*Document Owner: [System Administrator]*
